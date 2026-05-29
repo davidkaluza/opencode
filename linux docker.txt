@@ -1,0 +1,16 @@
+Ja, das können Sie auf Linux bauen. Die Dockerfile-Konfiguration ist bereits vorbereitet.
+
+Anleitung für Linux:
+
+Docker und Docker Compose installieren:
+sudo apt update
+sudo apt install docker.io docker-compose
+Image bauen:
+cd /pfad/zum/stock-dashboard
+docker-compose up --build -d
+Status prüfen:
+docker-compose ps
+Logs anzeigen:
+docker-compose logs -f
+Stoppen:
+docker-compose down

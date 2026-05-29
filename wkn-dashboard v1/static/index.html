@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WKN Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+.container { max-width: 960px; margin: 0 auto; padding: 24px; }
+h1 { font-size: 24px; font-weight: 600; margin-bottom: 16px; color: #f1f5f9; }
+.hint { font-size: 12px; color: #64748b; margin-bottom: 16px; }
+.header-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.header-bar input { flex: 1; min-width: 200px; padding: 10px 14px; border: 1px solid #334155; border-radius: 8px; background: #1e293b; color: #e2e8f0; font-size: 14px; outline: none; }
+.header-bar input:focus { border-color: #3b82f6; }
+.header-bar button { padding: 10px 16px; background: #3b82f6; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.header-bar button:hover { background: #2563eb; }
+.header-bar button.sec { background: #334155; color: #e2e8f0; border: 1px solid #475569; }
+.header-bar button.sec:hover { background: #475569; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 10px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #1e293b; }
+td { padding: 12px; border-bottom: 1px solid #1e293b; font-size: 14px; vertical-align: middle; }
+tr:hover td { background: #1e293b; }
+code { font-family: 'SF Mono', Consolas, monospace; font-size: 13px; }
+.price { font-variant-numeric: tabular-nums; font-weight: 600; }
+.del-btn { background: none; border: none; color: #64748b; cursor: pointer; padding: 4px 8px; font-size: 16px; border-radius: 4px; }
+.del-btn:hover { color: #ef4444; background: #1e293b; }
+.empty-state { text-align: center; padding: 48px; color: #64748b; }
+.empty-state p { margin-top: 8px; }
+.error-msg { color: #ef4444; font-size: 13px; }
+.loading { display: inline-block; width: 14px; height: 14px; border: 2px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.last-update { text-align: right; font-size: 12px; color: #64748b; margin-top: 16px; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; z-index: 100; }
+.modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1e293b; border-radius: 12px; padding: 24px; width: 90%; max-width: 500px; z-index: 101; display: none; max-height: 80vh; overflow-y: auto; }
+.modal h2 { font-size: 18px; margin-bottom: 12px; }
+.modal input { width: 100%; padding: 8px 12px; border: 1px solid #334155; border-radius: 6px; background: #0f172a; color: #e2e8f0; font-size: 14px; margin-bottom: 12px; outline: none; }
+.modal input:focus { border-color: #3b82f6; }
+.search-result { padding: 8px 0; border-bottom: 1px solid #334155; cursor: pointer; }
+.search-result:hover { color: #3b82f6; }
+.search-result .sym { font-weight: 600; }
+.search-result .ex { font-size: 11px; color: #64748b; }
+.close-btn { float: right; background: none; border: none; color: #64748b; font-size: 20px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>WKN Dashboard</h1>
+  <div class="hint">WKN (6-stellig), ISIN (12-stellig) oder Yahoo-Ticker – z.B. <code>519000</code>, <code>DE0005190003</code>, <code>BMW.DE</code></div>
+  <div class="header-bar">
+    <input type="text" id="wknInput" placeholder="z.B. 519000, BMW.DE, IE000U9ODG19, A3E1JS" autofocus>
+    <button id="addBtn">+ Hinzufügen</button>
+    <button class="sec" id="searchNameBtn">🔍 Name suchen</button>
+    <button class="sec" id="refreshAllBtn">↻ Alle</button>
+    <button class="sec" id="exportBtn">⬇ Export</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Eingabe</th>
+        <th>Ticker</th>
+        <th>Name</th>
+        <th style="text-align:right">Kurs</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="empty-state" id="emptyState">
+    <p>Suche oben eingeben und auf "Hinzufügen" klicken</p>
+  </div>
+  <div class="last-update" id="lastUpdate"></div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay"></div>
+<div class="modal" id="modal">
+  <button class="close-btn" id="closeModalBtn">✕</button>
+  <h2>Nach Namen suchen</h2>
+  <input type="text" id="nameSearchInput" placeholder="z.B. iShares Global Aerospace">
+  <div id="searchResults"></div>
+</div>
+
+<script>
+const input = document.getElementById('wknInput');
+const addBtn = document.getElementById('addBtn');
+const tbody = document.getElementById('tbody');
+const emptyState = document.getElementById('emptyState');
+const lastUpdate = document.getElementById('lastUpdate');
+const refreshAllBtn = document.getElementById('refreshAllBtn');
+const searchNameBtn = document.getElementById('searchNameBtn');
+const modal = document.getElementById('modal');
+const modalOverlay = document.getElementById('modalOverlay');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const nameSearchInput = document.getElementById('nameSearchInput');
+const searchResults = document.getElementById('searchResults');
+
+let entries = [];
+
+function load() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('wkn_entries') || '[]');
+    entries = saved.map(e => ({
+      query: e.query || e.wkn || '',
+      ticker: e.ticker || null,
+      name: e.name || null
+    })).filter(e => e.query);
+  } catch {}
+}
+
+function save() {
+  localStorage.setItem('wkn_entries', JSON.stringify(
+    entries.map(e => ({ query: e.query, ticker: e.ticker, name: e.name }))
+  ));
+}
+
+load();
+
+async function apiSearch(query) {
+  const r = await fetch(`/api/search?wkn=${encodeURIComponent(query)}`);
+  return r.json();
+}
+
+async function apiLookup(ticker) {
+  const r = await fetch(`/api/lookup?ticker=${encodeURIComponent(ticker)}`);
+  return r.json();
+}
+
+async function apiSearchName(name) {
+  const r = await fetch(`/api/search-name?name=${encodeURIComponent(name)}`);
+  return r.json();
+}
+
+function fmtPrice(price, currency) {
+  if (price == null) return '\u2014';
+  return Number(price).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (currency || '');
+}
+
+function render() {
+  tbody.innerHTML = '';
+  emptyState.style.display = entries.length ? 'none' : 'block';
+  for (const e of entries) {
+    const tr = document.createElement('tr');
+    let priceHtml;
+    if (e.loading) {
+      priceHtml = '<span class="loading"></span>';
+    } else if (e.error) {
+      priceHtml = `<span class="error-msg">${e.error}</span>`;
+    } else if (e.price != null) {
+      priceHtml = `<span class="price">${fmtPrice(e.price_eur ?? e.price, e.price_eur != null ? 'EUR' : e.currency)}</span>`;
+    } else {
+      priceHtml = '\u2014';
+    }
+    tr.innerHTML = `
+      <td><code>${e.query}</code></td>
+      <td>${e.ticker ? `<code>${e.ticker}</code>` : '\u2014'}</td>
+      <td>${e.name || '\u2014'}</td>
+      <td style="text-align:right">${priceHtml}</td>
+      <td><button class="del-btn" onclick="remove('${e.query.replace(/'/g, "\\'")}')">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+  const now = new Date();
+  lastUpdate.textContent = `Stand: ${now.toLocaleString('de-DE')}  ${entries.length} Positionen`;
+}
+
+async function add(query) {
+  query = query.trim();
+  if (!query) return;
+  if (entries.some(e => e.query.toUpperCase() === query.toUpperCase())) return;
+
+  const entry = { query, ticker: null, name: null, price: null, currency: null, price_eur: null, error: null, loading: true };
+  entries.push(entry);
+  save();
+  render();
+
+  const data = await apiSearch(query);
+  entry.loading = false;
+  if (data.ticker) {
+    entry.ticker = data.ticker;
+    entry.name = data.name;
+    entry.price = data.price;
+    entry.currency = data.currency;
+    entry.price_eur = data.price_eur;
+  } else {
+    entry.error = data.error || 'Keine Daten';
+  }
+  save();
+  render();
+}
+
+function remove(query) {
+  entries = entries.filter(e => e.query !== query);
+  save();
+  render();
+}
+
+async function refreshAll() {
+  for (const e of entries) {
+    e.loading = true;
+    e.error = null;
+  }
+  render();
+  for (const e of entries) {
+    const data = await apiSearch(e.query);
+    e.loading = false;
+    if (data.ticker) {
+      e.ticker = data.ticker;
+      e.name = data.name;
+      e.price = data.price;
+      e.currency = data.currency;
+      e.price_eur = data.price_eur;
+      e.error = null;
+    } else {
+      e.error = data.error || 'Keine Daten';
+    }
+    render();
+  }
+  save();
+}
+
+addBtn.addEventListener('click', () => { add(input.value); input.value = ''; input.focus(); });
+input.addEventListener('keydown', e => { if (e.key === 'Enter') { add(input.value); input.value = ''; }});
+refreshAllBtn.addEventListener('click', refreshAll);
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (entries.length === 0) return;
+  const lines = ['Name;Ticker;Eingabe'];
+  for (const e of entries) {
+    if (e.name && e.ticker) {
+      lines.push(`${e.name};${e.ticker};${e.query}`);
+    }
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ticker_liste.csv';
+  a.click();
+});
+
+function openModal() {
+  modal.style.display = 'block';
+  modalOverlay.style.display = 'block';
+  nameSearchInput.value = '';
+  searchResults.innerHTML = '<p style="color:#64748b">Namen eingeben zum Suchen</p>';
+  nameSearchInput.focus();
+}
+
+function closeModal() {
+  modal.style.display = 'none';
+  modalOverlay.style.display = 'none';
+}
+
+searchNameBtn.addEventListener('click', openModal);
+closeModalBtn.addEventListener('click', closeModal);
+modalOverlay.addEventListener('click', closeModal);
+
+let searchTimeout;
+nameSearchInput.addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  const val = nameSearchInput.value.trim();
+  if (!val) { searchResults.innerHTML = '<p style="color:#64748b">Namen eingeben zum Suchen</p>'; return; }
+  searchTimeout = setTimeout(async () => {
+    searchResults.innerHTML = '<p><span class="loading"></span> Suche...</p>';
+    const data = await apiSearchName(val);
+    if (!data.results || data.results.length === 0) {
+      searchResults.innerHTML = '<p style="color:#64748b">Keine Ergebnisse</p>';
+      return;
+    }
+    searchResults.innerHTML = data.results.map(r =>
+      `<div class="search-result" onclick="pickNameResult('${r.symbol}', '${r.name.replace(/'/g, "\\'")}')">
+        <span class="sym">${r.symbol}</span> ${r.name}
+        <span class="ex">${r.exchange || ''}</span>
+      </div>`
+    ).join('');
+  }, 300);
+});
+
+function pickNameResult(symbol, name) {
+  closeModal();
+  input.value = symbol;
+  add(symbol);
+}
+
+render();
+if (entries.length > 0) refreshAll();
+</script>
+</body>
+</html>

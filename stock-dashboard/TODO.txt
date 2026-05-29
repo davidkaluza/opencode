@@ -1,0 +1,20 @@
+.gtap-4 von 1 auf 0.2
+historische werte 1M und 6M hinzufügen
+auch beim Graphen
+
+maximale breite des  Monitors und dabei die anzahl der karten anpassen
+
+weitere Ansicht einfügen als Tabelle, bitte zwei Icons über der wkn und ticker leiste, Tabelle und karten
+
+Export button (TICKER, NAME, ANZAHL DER AKTIEN, KAUFKURS DER AKTIEN)
+IMPORTBUTTON auch
+
+--
+
+auch unterhalb des aktuellen kurses die historischen werte 1 Monat und 6 monate ergängzen
+
+die zeile buy:.. G/V verschieben unterhalb des aktuellen Kaufkurses
+
+--
+
+

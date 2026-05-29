@@ -1,0 +1,160 @@
+.stock-card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  color: #fff;
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+  min-height: 200px;
+}
+
+.stock-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.stock-card.error {
+  opacity: 0.7;
+  border: 1px solid #ff4444;
+}
+
+.stock-card-content {
+  padding: 20px;
+  padding-top: 44px;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  background: transparent;
+  border: 1px solid #ff4444;
+  color: #ff4444;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+}
+
+.delete-btn:hover {
+  background: #ff4444;
+  color: #fff;
+}
+
+.stock-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.stock-symbol {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #00d4ff;
+}
+
+.stock-market-state {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  background: #2d2d44;
+  border-radius: 4px;
+  color: #888;
+}
+
+.stock-name {
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-bottom: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stock-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+  min-height: 2.5rem;
+}
+
+.stock-price {
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.stock-change {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.stock-change.positive {
+  color: #00ff88;
+}
+
+.stock-change.negative {
+  color: #ff4444;
+}
+
+.price-placeholder {
+  color: #555;
+}
+
+.stock-error {
+  color: #ff4444;
+  text-align: center;
+  padding: 20px;
+}
+
+.stock-news {
+  border-top: 1px solid #2d2d44;
+  padding-top: 16px;
+  margin-top: 8px;
+  min-height: 4rem;
+}
+
+.stock-news h4 {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.news-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.news-item {
+  margin-bottom: 12px;
+}
+
+.news-item a {
+  color: #00d4ff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  display: block;
+  line-height: 1.4;
+}
+
+.news-item a:hover {
+  text-decoration: underline;
+}
+
+.news-source {
+  display: block;
+  font-size: 0.75rem;
+  color: #666;
+  margin-top: 4px;
+}
+
+.no-news {
+  color: #666;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 10px;
+}

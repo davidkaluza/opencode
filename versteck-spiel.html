@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wald Versteckspiel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Fredoka', sans-serif;
+            overflow: hidden;
+            background: linear-gradient(180deg, #87CEEB 0%, #B4E7CE 60%, #7CB342 100%);
+            min-height: 100vh;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            background: rgba(255,255,255,0.95);
+            padding: 12px 35px;
+            border-radius: 50px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            text-align: center;
+            border: 4px solid #4CAF50;
+        }
+
+        .header h1 {
+            color: #2E7D32;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 3px;
+        }
+
+        .round-badge {
+            position: absolute;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #FF9800, #FFB74D);
+            color: white;
+            padding: 8px 25px;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4);
+            z-index: 100;
+        }
+
+        .score {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        .score-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 1rem;
+            color: #333;
+        }
+
+        .score-icon {
+            width: 25px;
+            height: 25px;
+        }
+
+        .sky {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60%;
+            pointer-events: none;
+        }
+
+        .sun {
+            position: absolute;
+            top: 40px;
+            right: 80px;
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .cloud {
+            position: absolute;
+            animation: float 25s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(60px); }
+        }
+
+        .airplane {
+            position: absolute;
+            animation: flyPlane 15s linear infinite;
+        }
+
+        @keyframes flyPlane {
+            0% { transform: translateX(-150px); }
+            100% { transform: translateX(calc(100vw + 150px)); }
+        }
+
+        .hotballoon {
+            position: absolute;
+            animation: floatBalloon 20s ease-in-out infinite;
+        }
+
+        @keyframes floatBalloon {
+            0%, 100% { transform: translate(0, 0) rotate(-2deg); }
+            25% { transform: translate(30px, -20px) rotate(2deg); }
+            50% { transform: translate(10px, 10px) rotate(-1deg); }
+            75% { transform: translate(-20px, -15px) rotate(1deg); }
+        }
+
+        .bird {
+            position: absolute;
+            animation: flyBird 8s ease-in-out infinite;
+        }
+
+        @keyframes flyBird {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(40px, -15px) rotate(10deg); }
+            50% { transform: translate(20px, 5px) rotate(0deg); }
+            75% { transform: translate(50px, -10px) rotate(-10deg); }
+        }
+
+        .ground {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 48%;
+            background: linear-gradient(180deg, #8BC34A 0%, #689F38 50%, #558B2F 100%);
+        }
+
+        .ground::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 20px;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 30px,
+                #9CCC65 30px,
+                #9CCC65 35px,
+                transparent 35px,
+                transparent 40px
+            );
+        }
+
+        .forest {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .tree {
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .tree:hover {
+            transform: scale(1.05);
+        }
+
+        .tree svg {
+            filter: drop-shadow(4px 8px 6px rgba(0,0,0,0.3));
+        }
+
+        .bush {
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .bush:hover {
+            transform: scale(1.08);
+        }
+
+        .bush svg {
+            filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.25));
+        }
+
+        .mushroom-house {
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .mushroom-house:hover {
+            transform: scale(1.05);
+        }
+
+        .mushroom-house svg {
+            filter: drop-shadow(3px 6px 8px rgba(0,0,0,0.3));
+        }
+
+        .log {
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .log:hover {
+            transform: scale(1.05);
+        }
+
+        .mushroom {
+            position: absolute;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .mushroom:hover {
+            transform: scale(1.05);
+        }
+
+        .mushroom svg {
+            filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.2));
+        }
+
+        .character {
+            position: absolute;
+            transition: all 0.5s ease;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .character.found {
+            animation: bounce 0.6s ease infinite;
+            filter: drop-shadow(0 0 10px gold);
+        }
+
+        .character.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .character.peek {
+            opacity: 1;
+            animation: peek 0.5s ease;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        @keyframes peek {
+            0% { transform: translateX(-20px); opacity: 0; }
+            50% { transform: translateX(5px); }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+
+        @keyframes sparkle {
+            0%, 100% { opacity: 0; transform: scale(0); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+
+        .sparkle {
+            position: absolute;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .sparkle span {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: gold;
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+            animation: sparkle 1s ease infinite;
+        }
+
+        .sparkle span:nth-child(2) { animation-delay: 0.2s; left: 30px; }
+        .sparkle span:nth-child(3) { animation-delay: 0.4s; left: -20px; top: 20px; }
+        .sparkle span:nth-child(4) { animation-delay: 0.6s; top: -15px; left: 10px; }
+        .sparkle span:nth-child(5) { animation-delay: 0.8s; left: 40px; top: 30px; }
+
+        .woodpecker {
+            position: absolute;
+            z-index: 12;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .woodpecker:hover {
+            transform: scale(1.1);
+        }
+
+        .woodpecker.pecking {
+            animation: peck 0.3s ease infinite;
+        }
+
+        @keyframes peck {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-20deg); }
+        }
+
+        .message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #FF6B6B, #FFE66D);
+            padding: 30px 50px;
+            border-radius: 30px;
+            font-size: 2rem;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            z-index: 200;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            animation: popIn 0.5s ease;
+            display: none;
+            text-align: center;
+        }
+
+        .message .round-info {
+            font-size: 1.2rem;
+            margin-top: 10px;
+            opacity: 0.9;
+        }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .hint-text {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 10px 25px;
+            border-radius: 25px;
+            color: #555;
+            font-size: 0.95rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .restart-btn, .next-btn {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.3rem;
+            font-family: 'Fredoka', sans-serif;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4);
+            transition: all 0.3s ease;
+            display: none;
+            z-index: 150;
+        }
+
+        .restart-btn:hover, .next-btn:hover {
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 12px 35px rgba(76, 175, 80, 0.5);
+        }
+
+        .next-btn {
+            background: linear-gradient(135deg, #FF9800, #FFB74D);
+            box-shadow: 0 8px 25px rgba(255, 152, 0, 0.4);
+        }
+
+        .next-btn:hover {
+            box-shadow: 0 12px 35px rgba(255, 152, 0, 0.5);
+        }
+
+        .total-score {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: rgba(255,255,255,0.95);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 1rem;
+            color: #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 3px solid #FF9800;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>🔍 Wald Versteckspiel 🌲</h1>
+            <p>Klicke auf die Verstecke, um die beiden zu finden!</p>
+            <div class="score">
+                <div class="score-item">
+                    <svg class="score-icon" viewBox="0 0 50 50">
+                        <circle cx="25" cy="15" r="12" fill="#FFCCBC"/>
+                        <circle cx="20" cy="12" r="2" fill="#333"/>
+                        <circle cx="30" cy="12" r="2" fill="#333"/>
+                        <path d="M22 18 Q25 22 28 18" stroke="#333" stroke-width="2" fill="none"/>
+                        <rect x="15" y="25" width="20" height="20" rx="5" fill="#E53935"/>
+                        <path d="M15 27 Q10 20 20 22" fill="#FF7043"/>
+                    </svg>
+                    <span id="boy-score">0/1</span>
+                </div>
+                <div class="score-item">
+                    <svg class="score-icon" viewBox="0 0 50 50">
+                        <ellipse cx="25" cy="30" rx="18" ry="12" fill="#424242"/>
+                        <circle cx="15" cy="22" r="8" fill="#424242"/>
+                        <circle cx="35" cy="22" r="8" fill="#424242"/>
+                        <circle cx="10" cy="18" r="4" fill="#616161"/>
+                        <circle cx="40" cy="18" r="4" fill="#616161"/>
+                        <circle cx="13" cy="20" r="1.5" fill="#fff"/>
+                        <circle cx="17" cy="20" r="1.5" fill="#fff"/>
+                        <ellipse cx="25" cy="26" rx="3" ry="2" fill="#212121"/>
+                    </svg>
+                    <span id="dog-score">0/1</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="round-badge" id="round-badge">Runde 1</div>
+        <div class="total-score" id="total-score">Punkte: 0</div>
+
+        <div class="sun">
+            <svg width="70" height="70" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="22" fill="#FFD93D"/>
+                <g stroke="#FFD93D" stroke-width="4">
+                    <line x1="40" y1="5" x2="40" y2="13"/>
+                    <line x1="40" y1="67" x2="40" y2="75"/>
+                    <line x1="5" y1="40" x2="13" y2="40"/>
+                    <line x1="67" y1="40" x2="75" y2="40"/>
+                    <line x1="15" y1="15" x2="21" y2="21"/>
+                    <line x1="59" y1="59" x2="65" y2="65"/>
+                    <line x1="65" y1="15" x2="59" y2="21"/>
+                    <line x1="21" y1="59" x2="15" y2="65"/>
+                </g>
+            </svg>
+        </div>
+
+        <div class="cloud" style="top: 60px; left: 8%;">
+            <svg width="100" height="50" viewBox="0 0 120 60">
+                <ellipse cx="30" cy="40" rx="25" ry="18" fill="white" opacity="0.9"/>
+                <ellipse cx="55" cy="30" rx="30" ry="22" fill="white" opacity="0.9"/>
+                <ellipse cx="85" cy="38" rx="22" ry="16" fill="white" opacity="0.9"/>
+            </svg>
+        </div>
+
+        <div class="cloud" style="top: 100px; left: 55%; animation-delay: -8s;">
+            <svg width="90" height="45" viewBox="0 0 100 50">
+                <ellipse cx="25" cy="32" rx="20" ry="14" fill="white" opacity="0.85"/>
+                <ellipse cx="50" cy="25" rx="25" ry="18" fill="white" opacity="0.85"/>
+                <ellipse cx="75" cy="30" rx="18" ry="13" fill="white" opacity="0.85"/>
+            </svg>
+        </div>
+
+        <div class="cloud" style="top: 130px; left: 30%; animation-delay: -15s;">
+            <svg width="80" height="40" viewBox="0 0 90 45">
+                <ellipse cx="22" cy="28" rx="18" ry="13" fill="white" opacity="0.8"/>
+                <ellipse cx="45" cy="22" rx="22" ry="16" fill="white" opacity="0.8"/>
+                <ellipse cx="68" cy="27" rx="16" ry="12" fill="white" opacity="0.8"/>
+            </svg>
+        </div>
+
+        <div class="airplane" style="top: 15%; animation-delay: -3s;">
+            <svg width="80" height="30" viewBox="0 0 80 30">
+                <ellipse cx="35" cy="15" rx="20" ry="8" fill="#ECEFF1"/>
+                <polygon points="55,15 75,12 75,18" fill="#ECEFF1"/>
+                <polygon points="25,8 45,8 40,3 30,3" fill="#ECEFF1"/>
+                <polygon points="25,22 45,22 40,27 30,27" fill="#ECEFF1"/>
+                <circle cx="15" cy="15" r="5" fill="#90CAF9" opacity="0.7"/>
+                <circle cx="10" cy="15" r="3" fill="#90CAF9" opacity="0.5"/>
+            </svg>
+        </div>
+
+        <div class="hotballoon" style="top: 22%; left: 70%;">
+            <svg width="70" height="100" viewBox="0 0 70 100">
+                <ellipse cx="35" cy="30" rx="28" ry="30" fill="#E53935"/>
+                <rect x="28" y="58" width="14" height="20" fill="#FFD54F"/>
+                <polygon points="20,78 35,95 50,78" fill="#FFD54F"/>
+                <line x1="28" y1="58" x2="20" y2="78" stroke="#8D6E63" stroke-width="2"/>
+                <line x1="42" y1="58" x2="50" y2="78" stroke="#8D6E63" stroke-width="2"/>
+                <ellipse cx="35" cy="25" rx="8" ry="10" fill="#FF7043" opacity="0.5"/>
+            </svg>
+        </div>
+
+        <div class="hotballoon" style="top: 12%; left: 25%; animation-delay: -7s;">
+            <svg width="50" height="75" viewBox="0 0 50 75">
+                <ellipse cx="25" cy="22" rx="20" ry="22" fill="#9C27B0"/>
+                <rect x="20" y="42" width="10" height="15" fill="#FFD54F"/>
+                <polygon points="14,57 25,72 36,57" fill="#FFD54F"/>
+                <line x1="20" y1="42" x2="14" y2="57" stroke="#8D6E63" stroke-width="1.5"/>
+                <line x1="30" y1="42" x2="36" y2="57" stroke="#8D6E63" stroke-width="1.5"/>
+                <ellipse cx="25" cy="18" rx="6" ry="8" fill="#CE93D8" opacity="0.5"/>
+            </svg>
+        </div>
+
+        <div class="bird" style="top: 28%; left: 15%;">
+            <svg width="25" height="20" viewBox="0 0 25 20">
+                <ellipse cx="12" cy="10" rx="8" ry="5" fill="#5D4037"/>
+                <polygon points="3,10 0,7 0,13" fill="#5D4037"/>
+                <circle cx="16" cy="8" r="3" fill="#5D4037"/>
+                <circle cx="17" cy="7.5" r="1" fill="#fff"/>
+                <polygon points="18,8 22,7 22,9" fill="#FF9800"/>
+            </svg>
+        </div>
+
+        <div class="bird" style="top: 20%; left: 45%; animation-delay: -2s;">
+            <svg width="22" height="18" viewBox="0 0 25 20">
+                <ellipse cx="12" cy="10" rx="8" ry="5" fill="#78909C"/>
+                <polygon points="3,10 0,7 0,13" fill="#78909C"/>
+                <circle cx="16" cy="8" r="3" fill="#78909C"/>
+                <circle cx="17" cy="7.5" r="1" fill="#fff"/>
+                <polygon points="18,8 22,7 22,9" fill="#FF9800"/>
+            </svg>
+        </div>
+
+        <div class="bird" style="top: 32%; left: 80%; animation-delay: -4s;">
+            <svg width="20" height="16" viewBox="0 0 25 20">
+                <ellipse cx="12" cy="10" rx="8" ry="5" fill="#37474F"/>
+                <polygon points="3,10 0,7 0,13" fill="#37474F"/>
+                <circle cx="16" cy="8" r="3" fill="#37474F"/>
+                <circle cx="17" cy="7.5" r="1" fill="#fff"/>
+                <polygon points="18,8 22,7 22,9" fill="#FF9800"/>
+            </svg>
+        </div>
+
+        <div class="ground"></div>
+        <div class="forest" id="forest"></div>
+
+        <button class="restart-btn" onclick="restartGame()">🔄 Neu starten</button>
+        <button class="next-btn" id="next-btn" onclick="nextRound()">➡️ Nächste Runde</button>
+        <div class="message" id="win-message">
+            <div>🎉 Super gemacht! 🎉</div>
+            <div class="round-info" id="round-info"></div>
+        </div>
+        <div class="hint-text">💡 Schau genau hin - hinter Bäumen, Büschen, Pilzen und dem Stamm!</div>
+    </div>
+
+    <script>
+        let currentRound = 1;
+        let totalPoints = 0;
+        let boyFound = false;
+        let dogFound = false;
+        let woodpeckerSpot = null;
+
+        const boySVG = `
+            <svg width="50" height="70" viewBox="0 0 60 80">
+                <circle cx="30" cy="25" r="20" fill="#FFCCBC"/>
+                <ellipse cx="30" cy="5" rx="22" ry="15" fill="#E53935"/>
+                <circle cx="22" cy="22" r="4" fill="#333"/>
+                <circle cx="38" cy="22" r="4" fill="#333"/>
+                <circle cx="23" cy="21" r="1.5" fill="#fff"/>
+                <circle cx="39" cy="21" r="1.5" fill="#fff"/>
+                <ellipse cx="30" cy="32" rx="4" ry="3" fill="#FFAB91"/>
+                <path d="M24 38 Q30 44 36 38" stroke="#E53935" stroke-width="3" fill="none"/>
+                <rect x="20" y="45" width="20" height="30" rx="8" fill="#2196F3"/>
+                <rect x="15" y="50" width="10" height="5" rx="2" fill="#FFCCBC"/>
+                <rect x="35" y="50" width="10" height="5" rx="2" fill="#FFCCBC"/>
+                <rect x="22" y="75" width="7" height="8" rx="2" fill="#5D4037"/>
+                <rect x="31" y="75" width="7" height="8" rx="2" fill="#5D4037"/>
+            </svg>
+        `;
+
+        const dogSVG = `
+            <svg width="45" height="45" viewBox="0 0 55 50">
+                <ellipse cx="27" cy="35" rx="20" ry="14" fill="#424242"/>
+                <ellipse cx="27" cy="25" rx="15" ry="12" fill="#424242"/>
+                <path d="M8 18 Q2 8 12 15" fill="#616161"/>
+                <path d="M46 18 Q52 8 42 15" fill="#616161"/>
+                <ellipse cx="20" cy="22" rx="4" ry="5" fill="#212121"/>
+                <ellipse cx="34" cy="22" rx="4" ry="5" fill="#212121"/>
+                <circle cx="19" cy="21" r="2" fill="#fff"/>
+                <circle cx="33" cy="21" r="2" fill="#fff"/>
+                <ellipse cx="27" cy="30" rx="5" ry="3" fill="#212121"/>
+                <path d="M27 33 Q30 38 33 33" stroke="#212121" stroke-width="2" fill="none"/>
+                <ellipse cx="10" cy="45" rx="4" ry="6" fill="#424242"/>
+                <ellipse cx="44" cy="45" rx="4" ry="6" fill="#424242"/>
+                <path d="M47 35 Q55 30 50 40" fill="#424242"/>
+            </svg>
+        `;
+
+        const treeSVG = (color, size = 1) => `
+            <svg width="${160 * size}" height="${240 * size}" viewBox="0 0 180 280">
+                <rect x="70" y="180" width="40" height="100" fill="#8D6E63"/>
+                <rect x="75" y="190" width="8" height="80" fill="#6D4C41"/>
+                <polygon points="90,10 20,180 160,180" fill="${color}"/>
+                <polygon points="90,50 35,160 145,160" fill="${color}" opacity="0.8"/>
+                <polygon points="90,90 50,140 130,140" fill="${color}" opacity="0.6"/>
+                <circle cx="60" cy="120" r="8" fill="#C62828" opacity="0.9"/>
+                <circle cx="110" cy="100" r="6" fill="#C62828" opacity="0.9"/>
+                <circle cx="80" cy="150" r="7" fill="#C62828" opacity="0.9"/>
+            </svg>
+        `;
+
+        const smallTreeSVG = (color) => `
+            <svg width="100" height="150" viewBox="0 0 100 150">
+                <rect x="38" y="100" width="24" height="50" fill="#8D6E63"/>
+                <polygon points="50,5 10,100 90,100" fill="${color}"/>
+                <polygon points="50,35 20,90 80,90" fill="${color}" opacity="0.8"/>
+                <polygon points="50,60 30,85 70,85" fill="${color}" opacity="0.6"/>
+            </svg>
+        `;
+
+        const bushSVG = `
+            <svg width="100" height="70" viewBox="0 0 120 80">
+                <ellipse cx="60" cy="55" rx="55" ry="35" fill="#2E7D32"/>
+                <ellipse cx="35" cy="45" rx="30" ry="25" fill="#388E3C"/>
+                <ellipse cx="85" cy="45" rx="30" ry="25" fill="#388E3C"/>
+                <ellipse cx="60" cy="35" rx="35" ry="28" fill="#43A047"/>
+                <circle cx="40" cy="40" r="6" fill="#E53935"/>
+                <circle cx="75" cy="35" r="5" fill="#E53935"/>
+                <circle cx="55" cy="50" r="4" fill="#E53935"/>
+            </svg>
+        `;
+
+        const smallBushSVG = `
+            <svg width="70" height="50" viewBox="0 0 80 55">
+                <ellipse cx="40" cy="40" rx="38" ry="25" fill="#2E7D32"/>
+                <ellipse cx="25" cy="32" rx="22" ry="18" fill="#388E3C"/>
+                <ellipse cx="55" cy="32" rx="22" ry="18" fill="#388E3C"/>
+                <ellipse cx="40" cy="25" rx="25" ry="20" fill="#43A047"/>
+            </svg>
+        `;
+
+        const mushroomSVG = `
+            <svg width="80" height="90" viewBox="0 0 80 90">
+                <rect x="28" y="50" width="24" height="40" rx="5" fill="#ECEFF1"/>
+                <ellipse cx="40" cy="50" rx="38" ry="30" fill="#E53935"/>
+                <circle cx="25" cy="35" r="7" fill="#FFEBEE"/>
+                <circle cx="50" cy="30" r="6" fill="#FFEBEE"/>
+                <circle cx="35" cy="48" r="5" fill="#FFEBEE"/>
+                <circle cx="55" cy="42" r="5" fill="#FFEBEE"/>
+            </svg>
+        `;
+
+        const largeMushroomSVG = `
+            <svg width="120" height="130" viewBox="0 0 140 150">
+                <rect x="50" y="80" width="40" height="70" rx="8" fill="#ECEFF1"/>
+                <rect x="55" y="85" width="8" height="60" fill="#CFD8DC"/>
+                <ellipse cx="70" cy="80" rx="65" ry="50" fill="#E53935"/>
+                <ellipse cx="70" cy="60" rx="55" ry="40" fill="#E53935"/>
+                <circle cx="40" cy="50" r="12" fill="#FFEBEE"/>
+                <circle cx="90" cy="45" r="10" fill="#FFEBEE"/>
+                <circle cx="60" cy="75" r="8" fill="#FFEBEE"/>
+                <circle cx="100" cy="70" r="9" fill="#FFEBEE"/>
+                <circle cx="50" cy="85" r="6" fill="#FFEBEE"/>
+                <rect x="55" y="130" width="30" height="15" rx="5" fill="#78909C"/>
+            </svg>
+        `;
+
+        const logSVG = `
+            <svg width="140" height="60" viewBox="0 0 160 70">
+                <ellipse cx="20" cy="35" rx="18" ry="30" fill="#8D6E63"/>
+                <ellipse cx="20" cy="35" rx="12" ry="22" fill="#A1887F"/>
+                <ellipse cx="20" cy="35" rx="6" ry="12" fill="#6D4C41"/>
+                <rect x="20" y="5" width="120" height="60" rx="10" fill="#8D6E63"/>
+                <ellipse cx="140" cy="35" rx="18" ry="30" fill="#8D6E63"/>
+                <ellipse cx="140" cy="35" rx="12" ry="22" fill="#A1887F"/>
+                <line x1="40" y1="8" x2="40" y2="62" stroke="#6D4C41" stroke-width="2"/>
+                <line x1="80" y1="8" x2="80" y2="62" stroke="#6D4C41" stroke-width="2"/>
+                <line x1="120" y1="8" x2="120" y2="62" stroke="#6D4C41" stroke-width="2"/>
+            </svg>
+        `;
+
+        const woodpeckerSVG = `
+            <svg width="35" height="45" viewBox="0 0 35 45">
+                <ellipse cx="18" cy="30" rx="12" ry="10" fill="#F44336"/>
+                <circle cx="18" cy="18" r="12" fill="#F44336"/>
+                <circle cx="14" cy="15" r="4" fill="#fff"/>
+                <circle cx="22" cy="15" r="4" fill="#fff"/>
+                <circle cx="15" cy="15" r="2" fill="#333"/>
+                <circle cx="23" cy="15" r="2" fill="#333"/>
+                <polygon points="18,22 15,30 21,30" fill="#FFEB3B"/>
+                <polygon points="10,18 2,15 2,21" fill="#333"/>
+                <polygon points="26,18 34,15 34,21" fill="#333"/>
+                <ellipse cx="10" cy="40" rx="4" ry="6" fill="#333"/>
+                <ellipse cx="26" cy="40" rx="4" ry="6" fill="#333"/>
+            </svg>
+        `;
+
+        function getRandomPosition(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function getHidingSpots() {
+            const treeColors = ['#2E7D32', '#388E3C', '#43A047', '#1B5E20'];
+            
+            const spots = [
+                { id: 'tree1', type: 'tree', x: 3, y: 8, svg: treeSVG(treeColors[0], 0.9), character: null },
+                { id: 'tree2', type: 'tree', x: 78, y: 5, svg: treeSVG(treeColors[1], 0.85), character: null },
+                { id: 'tree3', type: 'tree', x: 45, y: 10, svg: treeSVG(treeColors[2], 0.95), character: null },
+                { id: 'tree4', type: 'smallTree', x: 88, y: 12, svg: smallTreeSVG(treeColors[3]), character: null },
+                { id: 'tree5', type: 'smallTree', x: 15, y: 10, svg: smallTreeSVG(treeColors[0]), character: null },
+                { id: 'bush1', type: 'bush', x: 22, y: 18, svg: bushSVG, character: null },
+                { id: 'bush2', type: 'bush', x: 58, y: 15, svg: bushSVG, character: null },
+                { id: 'bush3', type: 'bush', x: 8, y: 20, svg: bushSVG, character: null },
+                { id: 'smallBush1', type: 'smallBush', x: 35, y: 22, svg: smallBushSVG, character: null },
+                { id: 'smallBush2', type: 'smallBush', x: 72, y: 20, svg: smallBushSVG, character: null },
+                { id: 'smallBush3', type: 'smallBush', x: 50, y: 25, svg: smallBushSVG, character: null },
+                { id: 'mushroom1', type: 'mushroom', x: 30, y: 28, svg: mushroomSVG, character: null },
+                { id: 'mushroom2', type: 'mushroom', x: 65, y: 22, svg: mushroomSVG, character: null },
+                { id: 'mushroom3', type: 'mushroom', x: 85, y: 18, svg: mushroomSVG, character: null },
+                { id: 'mushroom4', type: 'mushroom', x: 5, y: 25, svg: mushroomSVG, character: null },
+                { id: 'largeMushroom', type: 'largeMushroom', x: 40, y: 15, svg: largeMushroomSVG, character: null },
+                { id: 'log', type: 'log', x: 55, y: 28, svg: logSVG, character: null },
+                { id: 'log2', type: 'log', x: 18, y: 26, svg: logSVG, character: null },
+            ];
+
+            const boySpot = spots[getRandomPosition(0, spots.length - 1)];
+            let dogSpot;
+            do {
+                dogSpot = spots[getRandomPosition(0, spots.length - 1)];
+            } while (dogSpot.id === boySpot.id);
+
+            boySpot.character = 'boy';
+            dogSpot.character = 'dog';
+
+            woodpeckerSpot = spots[getRandomPosition(0, 4)];
+
+            return spots;
+        }
+
+        function createHidingSpot(spot) {
+            const element = document.createElement('div');
+            element.className = spot.type;
+            element.id = spot.id;
+            element.style.left = `${spot.x}%`;
+            element.style.bottom = `${spot.y}%`;
+            
+            if (spot.type.includes('bush') || spot.type.includes('log')) {
+                element.style.zIndex = 15;
+            } else {
+                element.style.zIndex = 10;
+            }
+            
+            element.innerHTML = spot.svg;
+            element.addEventListener('click', () => handleClick(spot, element));
+            return element;
+        }
+
+        function createCharacter(type, x, y) {
+            const character = document.createElement('div');
+            character.className = 'character hidden';
+            character.id = `char-${type}`;
+            character.style.left = `${x}%`;
+            character.style.bottom = `${y}%`;
+            character.style.zIndex = 20;
+            character.innerHTML = type === 'boy' ? boySVG : dogSVG;
+            return character;
+        }
+
+        function createWoodpecker(x, y) {
+            const woodpecker = document.createElement('div');
+            woodpecker.className = 'woodpecker pecking';
+            woodpecker.id = 'woodpecker';
+            woodpecker.style.left = `${x}%`;
+            woodpecker.style.bottom = `${y}%`;
+            woodpecker.innerHTML = woodpeckerSVG;
+            return woodpecker;
+        }
+
+        function handleClick(spot, element) {
+            if (spot.character === 'boy' && !boyFound) {
+                boyFound = true;
+                element.classList.add('found');
+                const charEl = document.getElementById('char-boy');
+                charEl.classList.remove('hidden');
+                charEl.classList.add('peek');
+                createSparkle(element);
+                document.getElementById('boy-score').textContent = '1/1 ✓';
+            } else if (spot.character === 'dog' && !dogFound) {
+                dogFound = true;
+                element.classList.add('found');
+                const charEl = document.getElementById('char-dog');
+                charEl.classList.remove('hidden');
+                charEl.classList.add('peek');
+                createSparkle(element);
+                document.getElementById('dog-score').textContent = '1/1 ✓';
+            }
+
+            if (boyFound && dogFound) {
+                checkWin();
+            }
+        }
+
+        function createSparkle(element) {
+            const sparkle = document.createElement('div');
+            sparkle.className = 'sparkle';
+            sparkle.innerHTML = '<span></span><span></span><span></span><span></span><span></span>';
+            
+            const rect = element.getBoundingClientRect();
+            sparkle.style.left = `${rect.left + rect.width/2}px`;
+            sparkle.style.top = `${rect.top}px`;
+            
+            document.body.appendChild(sparkle);
+            setTimeout(() => sparkle.remove(), 1500);
+        }
+
+        function checkWin() {
+            totalPoints += 2;
+            document.getElementById('total-score').textContent = `Punkte: ${totalPoints}`;
+            
+            setTimeout(() => {
+                document.getElementById('win-message').style.display = 'block';
+                document.getElementById('round-info').textContent = `+2 Punkte! Runde ${currentRound} abgeschlossen!`;
+                document.getElementById('next-btn').style.display = 'block';
+                document.querySelector('.restart-btn').style.display = 'block';
+            }, 500);
+        }
+
+        function nextRound() {
+            currentRound++;
+            document.getElementById('round-badge').textContent = `Runde ${currentRound}`;
+            document.getElementById('win-message').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'none';
+            document.querySelector('.restart-btn').style.display = 'none';
+            
+            boyFound = false;
+            dogFound = false;
+            
+            initGame();
+        }
+
+        function restartGame() {
+            currentRound = 1;
+            totalPoints = 0;
+            boyFound = false;
+            dogFound = false;
+            
+            document.getElementById('round-badge').textContent = 'Runde 1';
+            document.getElementById('total-score').textContent = 'Punkte: 0';
+            document.getElementById('win-message').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'none';
+            document.querySelector('.restart-btn').style.display = 'none';
+            
+            initGame();
+        }
+
+        function initGame() {
+            const forest = document.getElementById('forest');
+            forest.innerHTML = '';
+            
+            document.getElementById('boy-score').textContent = '0/1';
+            document.getElementById('dog-score').textContent = '0/1';
+            
+            const spots = getHidingSpots();
+            
+            spots.forEach(spot => {
+                forest.appendChild(createHidingSpot(spot));
+            });
+
+            const boySpot = spots.find(s => s.character === 'boy');
+            const dogSpot = spots.find(s => s.character === 'dog');
+            
+            forest.appendChild(createCharacter('boy', boySpot.x + 3, boySpot.y + 5));
+            forest.appendChild(createCharacter('dog', dogSpot.x + 2, dogSpot.y + 8));
+            
+            if (woodpeckerSpot) {
+                forest.appendChild(createWoodpecker(woodpeckerSpot.x + 5, woodpeckerSpot.y + 40));
+            }
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
