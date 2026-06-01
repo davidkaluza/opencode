@@ -1,38 +1,131 @@
-import React from 'react';
-import { Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 
-const TableView = ({ stocks, stockData, statsData, purchasePrices, shareQuantities, onUpdatePurchasePrice, onUpdateShareQuantity, onRemove }) => {
+const COLUMNS = [
+  { key: 'ticker', label: 'Ticker', align: 'text-left' },
+  { key: 'name', label: 'Name', align: 'text-left' },
+  { key: 'price', label: 'Preis', align: 'text-right' },
+  { key: 'change', label: 'Änd.', align: 'text-right' },
+  { key: '1d', label: '1D', align: 'text-right' },
+  { key: '1wk', label: '1W', align: 'text-right' },
+  { key: '1mo', label: '1M', align: 'text-right' },
+  { key: '6mo', label: '6M', align: 'text-right' },
+  { key: '1y', label: '1Y', align: 'text-right' },
+  { key: '5y', label: '5Y', align: 'text-right' },
+  { key: 'qty', label: 'Anzahl', align: 'text-center' },
+  { key: 'buyPrice', label: 'Kaufkurs', align: 'text-center' },
+  { key: 'buyDate', label: 'Datum', align: 'text-center' },
+  { key: 'value', label: 'Wert', align: 'text-right' },
+  { key: 'pl', label: 'G/V', align: 'text-right' },
+  { key: 'plPct', label: 'G/V %', align: 'text-right' },
+  { key: 'rendite', label: 'Rendite', align: 'text-right' },
+];
+
+const TableView = ({ stocks, stockData, statsData, purchasePrices, shareQuantities, purchaseDates, onUpdatePurchasePrice, onUpdateShareQuantity, onUpdatePurchaseDate, onRemove, onShowDetail }) => {
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const sortedStocks = useMemo(() => {
+    if (!sortKey) return stocks;
+    return [...stocks].sort((a, b) => {
+      const dataA = stockData[a];
+      const dataB = stockData[b];
+      const statsA = statsData[a]?.performance || {};
+      const statsB = statsData[b]?.performance || {};
+      const priceA = dataA?.price || 0;
+      const priceB = dataB?.price || 0;
+      const qtyA = shareQuantities[a] || 0;
+      const qtyB = shareQuantities[b] || 0;
+      const buyA = purchasePrices[a] || 0;
+      const buyB = purchasePrices[b] || 0;
+
+      let va, vb;
+      switch (sortKey) {
+        case 'ticker': va = a; vb = b; break;
+        case 'name': va = dataA?.name || ''; vb = dataB?.name || ''; break;
+        case 'price': va = priceA; vb = priceB; break;
+        case 'change': va = dataA?.change || 0; vb = dataB?.change || 0; break;
+        case '1d': va = statsA['1d']?.pct ?? 0; vb = statsB['1d']?.pct ?? 0; break;
+        case '1wk': va = statsA['1wk']?.pct ?? 0; vb = statsB['1wk']?.pct ?? 0; break;
+        case '1mo': va = statsA['1mo']?.pct ?? 0; vb = statsB['1mo']?.pct ?? 0; break;
+        case '6mo': va = statsA['6mo']?.pct ?? 0; vb = statsB['6mo']?.pct ?? 0; break;
+        case '1y': va = statsA['1y']?.pct ?? 0; vb = statsB['1y']?.pct ?? 0; break;
+        case '5y': va = statsA['5y']?.pct ?? 0; vb = statsB['5y']?.pct ?? 0; break;
+        case 'qty': va = qtyA; vb = qtyB; break;
+        case 'buyPrice': va = buyA; vb = buyB; break;
+        case 'buyDate': va = purchaseDates[a] || ''; vb = purchaseDates[b] || ''; break;
+        case 'value': va = priceA * qtyA; vb = priceB * qtyB; break;
+        case 'pl': {
+          const plA = priceA * qtyA - buyA * qtyA;
+          const plB = priceB * qtyB - buyB * qtyB;
+          va = plA; vb = plB;
+          break;
+        }
+        case 'plPct': {
+          va = buyA > 0 ? (priceA - buyA) / buyA * 100 : 0;
+          vb = buyB > 0 ? (priceB - buyB) / buyB * 100 : 0;
+          break;
+        }
+        case 'rendite': {
+          const daysA = purchaseDates[a] ? Math.floor((new Date() - new Date(purchaseDates[a])) / (1000 * 60 * 60 * 24)) : 0;
+          const daysB = purchaseDates[b] ? Math.floor((new Date() - new Date(purchaseDates[b])) / (1000 * 60 * 60 * 24)) : 0;
+          const hasDateA = purchaseDates[a] && buyA > 0 && daysA > 0;
+          const hasDateB = purchaseDates[b] && buyB > 0 && daysB > 0;
+          const rA = hasDateA ? (Math.pow(priceA / buyA, 365 / daysA) - 1) * 100 : (sortDir === 'asc' ? Infinity : -Infinity);
+          const rB = hasDateB ? (Math.pow(priceB / buyB, 365 / daysB) - 1) * 100 : (sortDir === 'asc' ? Infinity : -Infinity);
+          va = rA; vb = rB;
+          break;
+        }
+        default: va = a; vb = b;
+      }
+
+      if (typeof va === 'string') {
+        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      }
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+  }, [stocks, sortKey, sortDir, stockData, statsData, purchasePrices, shareQuantities, purchaseDates]);
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs-mono border-collapse">
+      <table className="w-full text-table-mono border-collapse">
         <thead>
           <tr className="border-b border-accent text-muted uppercase">
-            <th className="text-left p-2 font-normal">Ticker</th>
-            <th className="text-left p-2 font-normal">Name</th>
-            <th className="text-right p-2 font-normal">Preis</th>
-            <th className="text-right p-2 font-normal">Änd.</th>
-            <th className="text-right p-2 font-normal">1D</th>
-            <th className="text-right p-2 font-normal">1W</th>
-            <th className="text-right p-2 font-normal">1M</th>
-            <th className="text-right p-2 font-normal">6M</th>
-            <th className="text-right p-2 font-normal">1Y</th>
-            <th className="text-right p-2 font-normal">5Y</th>
-            <th className="text-center p-2 font-normal">Anzahl</th>
-            <th className="text-center p-2 font-normal">Kaufkurs</th>
-            <th className="text-right p-2 font-normal">Wert</th>
-            <th className="text-right p-2 font-normal">G/V</th>
+            {COLUMNS.map(col => (
+              <th
+                key={col.key}
+                onClick={() => handleSort(col.key)}
+                className={`${col.align} p-2 font-normal cursor-pointer hover:text-white transition-colors select-none`}
+              >
+                <span className="inline-flex items-center gap-1">
+                  {col.label}
+                  {sortKey === col.key && (
+                    sortDir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />
+                  )}
+                </span>
+              </th>
+            ))}
             <th className="w-8 p-2"></th>
           </tr>
         </thead>
         <tbody>
           {stocks.length === 0 && (
             <tr>
-              <td colSpan={15} className="text-center p-10 text-muted border-b border-accent">
+              <td colSpan={20} className="text-center p-10 text-muted border-b border-accent">
                 WATCHLIST EMPTY. ADD SYMBOLS ABOVE.
               </td>
             </tr>
           )}
-          {stocks.map(symbol => {
+          {sortedStocks.map(symbol => {
             const data = stockData[symbol];
             const stats = statsData[symbol]?.performance || {};
             const price = data?.price || 0;
@@ -41,10 +134,16 @@ const TableView = ({ stocks, stockData, statsData, purchasePrices, shareQuantiti
             const isPositive = change >= 0;
             const qty = shareQuantities[symbol] || 0;
             const buyPrice = purchasePrices[symbol] || 0;
+            const buyDate = purchaseDates[symbol] || '';
             const buyValue = buyPrice * qty;
             const currentValue = price * qty;
             const pl = currentValue - buyValue;
             const plPct = buyPrice > 0 ? ((price - buyPrice) / buyPrice) * 100 : 0;
+            const daysHeld = buyDate ? Math.floor((new Date() - new Date(buyDate)) / (1000 * 60 * 60 * 24)) : 0;
+            const cagr = buyDate && buyPrice > 0 && daysHeld > 0
+              ? (Math.pow(price / buyPrice, 365 / daysHeld) - 1) * 100
+              : 0;
+            const showRendite = buyDate && buyPrice > 0;
 
             const normPerf = (v) => {
               if (v === null || v === undefined) return { pct: null, abs: null };
@@ -71,7 +170,7 @@ const TableView = ({ stocks, stockData, statsData, purchasePrices, shareQuantiti
             return (
               <tr key={symbol} className="border-b border-accent hover:bg-surface/50 transition-colors">
                 <td className="p-2 font-bold">{symbol}</td>
-                <td className="p-2 text-muted max-w-[200px] truncate">{data?.name || 'N/A'}</td>
+                <td className="p-2 text-muted max-w-[200px] truncate cursor-pointer hover:text-accent transition-colors" onClick={() => onShowDetail(symbol)}>{data?.name || 'N/A'}</td>
                 <td className="p-2 text-right font-bold">{typeof price === 'number' ? price.toFixed(2) : '...'}</td>
                 <td className={`p-2 text-right ${pctClass(change)}`}>
                   {isPositive ? '+' : ''}{change.toFixed(2)} ({isPositive ? '+' : ''}{changePct.toFixed(2)}%)
@@ -100,11 +199,25 @@ const TableView = ({ stocks, stockData, statsData, purchasePrices, shareQuantiti
                     className="bg-background border border-accent text-xs-mono p-1 w-20 text-center focus:outline-none focus:border-muted transition-colors"
                   />
                 </td>
+                <td className="p-2 text-center">
+                  <input
+                    type="date"
+                    value={buyDate || ''}
+                    onChange={(e) => onUpdatePurchaseDate(symbol, e.target.value)}
+                    className="bg-background border border-accent text-xs-mono p-1 w-32 text-center focus:outline-none focus:border-muted transition-colors"
+                  />
+                </td>
                 <td className={`p-2 text-right ${pl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                   {currentValue.toFixed(2)}
                 </td>
                 <td className={`p-2 text-right ${pl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {pl >= 0 ? '+' : ''}{pl.toFixed(2)} ({pl >= 0 ? '+' : ''}{plPct.toFixed(2)}%)
+                  {pl >= 0 ? '+' : ''}{pl.toFixed(2)}
+                </td>
+                <td className={`p-2 text-right ${plPct >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {plPct >= 0 ? '+' : ''}{plPct.toFixed(2)}%
+                </td>
+                <td className={`p-2 text-right ${showRendite ? (cagr >= 0 ? 'text-green-500' : 'text-red-500') : 'text-muted'}`}>
+                  {showRendite ? `${cagr >= 0 ? '+' : ''}${cagr.toFixed(2)}% p.a.` : '-'}
                 </td>
                 <td className="p-2 text-center">
                   <button

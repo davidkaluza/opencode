@@ -1,64 +1,51 @@
 # Stock Dashboard
 
-Two-service app: FastAPI backend (yfinance) + Vite/React/Tailwind frontend.
+Zwei Dienste: FastAPI-Backend (yfinance) + Vite/React/Tailwind-Frontend.
 
-## Dev quick start
+## Befehle
 
 ```bash
-# Backend (port 8000)
-cd backend; pip install -r requirements.txt; python main.py
-
-# Frontend (port 5173) — separate terminal
-cd frontend; npm install; npm run dev
+backend> python main.py                   # Port 8000
+frontend> npm install && npm run dev      # Port 5173
 ```
 
-`start.bat` launches both with one click (Windows).
+`start.bat` startet beide (Windows). Docker: `docker compose up --build`.
 
-## Architecture
+## API (`localhost:8000`)
 
-```
-stock-dashboard/
-  backend/main.py     — FastAPI, port 8000
-  frontend/src/       — Vite + React 18 + Tailwind, dev 5173 / prod 80 (nginx)
-  docker-compose.yml  — both services
-```
-
-No `vite.config.js` — uses Vite defaults. API base is hardcoded `localhost:8000` in `App.jsx:6-8` (same for dev & prod; `NODE_ENV` check is dead code). In Docker, frontend nginx serves `dist/` and still proxies to `localhost:8000`.
-
-## API endpoints (localhost:8000)
-
-| Endpoint | Notes |
+| Endpunkt | Notiz |
 |---|---|
-| `GET /price/{symbol}` | current price, change, name, currency |
-| `GET /stats/{symbol}` | perf % for 1d, 1wk, 1y, 5y |
-| `GET /history/{symbol}?period=1mo` | OHLC close + dates |
-| `GET /news/{symbol}` | top 5 news items |
+| `GET /price/{symbol}` | Kurs, Änderung, Name, Währung |
+| `GET /stats/{symbol}` | Performance % (1d/1wk/1mo/6mo/1y/5y) |
+| `GET /history/{symbol}?period=1mo` | OHLC-Schlusskurse + Daten |
+| `GET /news/{symbol}` | Top-5-News |
 
-`symbol` accepts yahoo tickers (`.DE` suffix) or German 6-digit WKN — mapped via `WKN_MAP` in `main.py:18-69`. Unknown WKNs get `.DE` fallback (`resolve_symbol` at `main.py:71-90`).
+Alle nutzen `yfinance` – kein Cache, keine DB, keine Rate-Limits.
 
-## Frontend quirks
+## Symbol-Auflösung (`main.py:71-90`)
 
-- **No tests, no lint config, no typecheck.** Only `dev`/`build`/`preview` scripts.
-- LocalStorage-based state: watchlist, purchase prices, share quantities. Survives refresh.
-- Auto-refetches all data every 60s (`App.jsx:71`).
-- Tailwind custom theme: `bg-[#0a0a0a]`, `surface:[#121212]`, `accent:[#333]`, `muted:[#888]`. Custom font sizes `xs-mono`/`sm-mono`.
-- Recharts for sparklines; `lucide-react` for icons.
-- `NewsPanel.jsx` component exists but is **not wired into any view** — dead code.
-- CSS: `@tailwind` directives + custom JetBrains Mono font + styled scrollbar.
+WKN via `WKN_MAP` (~50 Einträge). 6-stellige unbekannte WKNs bekommen `.DE`-Suffix. Alles andere wird direkt an yfinance durchgereicht.
 
-## Backend quirks
+## Backend
 
-- CORS wide open (`allow_origins=["*"]`).
-- yfinance for all market data. No env vars, no config.
-- `WKN_MAP` in `main.py:18-69` maps ~50 German WKNs to tickers.
-- No database, no caching.
+Single-File `backend/main.py`. Kein Package, keine Router, kein Config-Management. Abhängigkeiten: `fastapi`, `uvicorn`, `yfinance`, `pandas`.
 
-## Docker
+## Frontend
 
-```bash
-docker compose up --build   # backend:8000, frontend:80
-```
+- **State**: localStorage `accounts`/`activeAccountId`/`viewMode`. Auto-Refresh alle 60s.
+- **API-Base** hartkodiert in `App.jsx:8` (`http://localhost:8000`).
+- **Kein `vite.config.js`** — reine Vite-Standards.
+- **Deps**: React 18, recharts, lucide-react, axios, Tailwind 3.
+- **Tailwind**: custom colors `background/surface:#33312B`, `accent:#C09537`, `muted:#888888`; Font-Sizes `xs-mono`/`sm-mono`/`title-mono`/`table-mono`.
+- **Schrift**: JetBrains Mono (Google Fonts, über `index.html` geladen).
+- **Scripts**: nur `dev`/`build`/`preview` — keine Tests, Lint oder Typecheck.
+- **Card-Sortierung**: Name/Preis/Wert/Rendite/Tage – clientseitig sortiert.
+- **Print-CSS**: Nur `#print-area` (TableView), A4-Hochformat. Bestimmte Spalten ausgeblendet.
 
-## No CI, no linter, no tests
+## Toter Code
 
-None configured. No `.github`, `.vscode`, pre-commit, or lint scripts.
+`NewsPanel.jsx` existiert, wird nirgends importiert.
+
+## CSV-Export/Import
+
+Semikolon (`;`), UTF-8-BOM, Spalten `TICKER;NAME;ANZAHL;KAUFKURS;DATUM`. Import erkennt `;` oder `,` automatisch.

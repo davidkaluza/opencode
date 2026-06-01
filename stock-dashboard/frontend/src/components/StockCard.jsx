@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { LineChart, Line, ResponsiveContainer, YAxis, XAxis, Tooltip } from 'recharts';
 import { Trash2 } from 'lucide-react';
 
-const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpdatePurchasePrice, onUpdateShareQuantity, onRemove, onPeriodChange }) => {
+const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, purchaseDate, onUpdatePurchasePrice, onUpdateShareQuantity, onUpdatePurchaseDate, onRemove, onPeriodChange, onShowDetail }) => {
   const [period, setPeriod] = useState('1mo');
   const isPositive = stock.change >= 0;
   const currentPrice = stock.price;
@@ -33,30 +33,42 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpda
     { label: '6M', value: '6mo' },
     { label: '1Y', value: '1y' },
     { label: '5Y', value: '5y' },
+    ...(purchaseDate ? [{ label: 'Seit Kauf', value: 'since_purchase' }] : []),
   ];
 
   const handlePeriodChange = (val) => {
     setPeriod(val);
-    onPeriodChange(stock.symbol, val);
+    if (val === 'since_purchase' && purchaseDate) {
+      onPeriodChange(stock.symbol, null, purchaseDate);
+    } else {
+      onPeriodChange(stock.symbol, val);
+    }
   };
 
-  // Calculate profit since purchase
-  const profitSincePurchase = purchasePrice > 0 
-    ? ((currentPrice - purchasePrice) / purchasePrice) * 100 
+  const daysHeld = purchaseDate
+    ? Math.floor((new Date() - new Date(purchaseDate)) / (1000 * 60 * 60 * 24))
     : null;
+
+  const profitSincePurchase = purchasePrice > 0 && daysHeld !== null && daysHeld > 0
+    ? (Math.pow(currentPrice / purchasePrice, 365 / daysHeld) - 1) * 100
+    : purchasePrice > 0
+      ? ((currentPrice - purchasePrice) / purchasePrice) * 100
+      : null;
   const isProfitPct = profitSincePurchase >= 0;
+  const useCagr = purchasePrice > 0 && daysHeld !== null && daysHeld > 0;
+  const plPct = purchasePrice > 0 ? ((currentPrice - purchasePrice) / purchasePrice) * 100 : 0;
 
   const PerformanceBadge = ({ label, value }) => {
     const pct = value !== null && typeof value === 'object' ? (value.pct ?? 0) : (value ?? 0);
     const abs = value !== null && typeof value === 'object' ? value.abs : null;
     return (
       <div className="flex flex-col items-center justify-center border-r border-accent last:border-r-0 px-2">
-        <span className="text-[0.6rem] text-muted uppercase">{label}</span>
+        <span className="text-[0.72rem] text-muted uppercase">{label}</span>
         <span className={`text-xs-mono ${pct >= 0 ? 'text-green-500' : 'text-red-500'}`}>
           {pct > 0 ? '+' : ''}{pct}%
         </span>
         {abs !== null && abs !== undefined && (
-          <span className={`text-[0.5rem] ${abs >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+          <span className={`text-[0.6rem] ${abs >= 0 ? 'text-green-500' : 'text-red-500'}`}>
             {abs >= 0 ? '+' : ''}{abs.toFixed(2)}
           </span>
         )}
@@ -68,7 +80,7 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpda
     <div className="bg-surface border border-accent p-4 flex flex-col gap-4 hover:border-muted transition-colors">
       <div className="flex justify-between items-start">
         <div>
-          <h3 className="text-sm-mono font-bold uppercase">{stock.symbol} <span className="text-muted">({stock.name || 'N/A'})</span></h3>
+          <h3 className="text-title-mono font-bold uppercase cursor-pointer hover:text-accent transition-colors" onClick={() => onShowDetail(stock.symbol)}>{stock.name || 'N/A'} <span className="text-muted">({stock.symbol})</span></h3>
           <p className="text-xs-mono text-muted">{stock.currency}</p>
         </div>
         <button 
@@ -97,7 +109,7 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpda
 
       <div className="flex gap-2">
         <div className="flex flex-col gap-1 flex-1">
-          <span className="text-[0.6rem] text-muted uppercase">Qty</span>
+          <span className="text-[0.72rem] text-muted uppercase">Qty</span>
           <input 
             type="number" 
             value={shareQuantity || ''}
@@ -108,7 +120,7 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpda
           />
         </div>
         <div className="flex flex-col gap-1 flex-1">
-          <span className="text-[0.6rem] text-muted uppercase">Buy Price</span>
+          <span className="text-[0.72rem] text-muted uppercase">Buy Price</span>
           <input 
             type="number" 
             value={purchasePrice || ''}
@@ -118,15 +130,30 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpda
             onClick={(e) => e.stopPropagation()}
           />
         </div>
+        <div className="flex flex-col gap-1 flex-1">
+          <span className="text-[0.72rem] text-muted uppercase">Buy Date</span>
+          <input 
+            type="date" 
+            value={purchaseDate || ''}
+            onChange={(e) => { e.stopPropagation(); onUpdatePurchaseDate(stock.symbol, e.target.value); }}
+            className="bg-background border border-accent text-xs-mono p-1 focus:outline-none focus:border-muted transition-colors w-full"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       </div>
 
       <div className="flex justify-between items-center text-xs-mono">
-        <span className="text-muted">Buy: {buyValue.toFixed(2)} / <span className={currentValueClass}>Curr: {currentValue.toFixed(2)}</span></span>
-        {profitSincePurchase !== null && (
-          <span className={`${isProfitPct ? 'text-green-500' : 'text-red-500'}`}>
-            {isProfitPct ? '+' : ''}{profitSincePurchase.toFixed(2)}% ({hasProfit ? '+' : ''}{profitLoss.toFixed(2)})
-          </span>
-        )}
+        <span className="text-muted">Buy: {buyValue.toFixed(2)} / <span className={currentValueClass}>Curr: {currentValue.toFixed(2)}</span> <span className={currentValueClass}>({plPct >= 0 ? '+' : ''}{plPct.toFixed(2)}%)</span></span>
+        <div className="text-right">
+          {profitSincePurchase !== null && (
+            <span className={`${isProfitPct ? 'text-green-500' : 'text-red-500'}`}>
+              {isProfitPct ? '+' : ''}{profitSincePurchase.toFixed(2)}%{useCagr ? ' p.a.' : ''} ({hasProfit ? '+' : ''}{profitLoss.toFixed(2)})
+            </span>
+          )}
+          {daysHeld !== null && (
+            <span className="text-muted block text-[0.72rem]">{daysHeld} Tage</span>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -135,7 +162,7 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpda
             <button 
               key={p.value}
               onClick={(e) => { e.stopPropagation(); handlePeriodChange(p.value); }}
-              className={`text-[0.6rem] px-1 py-0.5 border border-accent transition-colors ${period === p.value ? 'bg-accent text-white' : 'text-muted hover:border-muted'}`}
+              className={`text-[0.72rem] px-1 py-0.5 border border-accent transition-colors ${period === p.value ? 'bg-accent text-white' : 'text-muted hover:border-muted'}`}
             >
               {p.label}
             </button>
@@ -143,10 +170,10 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpda
         </div>
         <div className="h-32 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={history} key={`${stock.symbol}-${period}-${history.length}`}>
+              <LineChart data={history} key={`${stock.symbol}-${period}-${purchaseDate}-${history.length}`}>
               <XAxis 
                 dataKey="date"
-                tick={{ fill: '#888', fontSize: '0.5rem' }}
+                tick={{ fill: '#888', fontSize: '0.6rem' }}
                 tickFormatter={(v) => v ? v.slice(5) : ''}
                 interval="preserveStartEnd"
                 minTickGap={30}
@@ -154,12 +181,12 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, onUpda
               <YAxis 
                 domain={[chartDomain.min, chartDomain.max]} 
                 orientation="left"
-                tick={{ fill: '#888', fontSize: '0.5rem' }}
+                tick={{ fill: '#888', fontSize: '0.6rem' }}
                 tickFormatter={(v) => v.toFixed(2)}
                 width={45}
               />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#121212', border: '1px solid #333', fontSize: '0.6rem' }}
+                contentStyle={{ backgroundColor: '#33312B', border: '1px solid #C09537', fontSize: '0.72rem' }}
                 labelStyle={{ color: '#888' }}
                 formatter={(value) => [value.toFixed(2), 'Price']}
                 labelFormatter={(label) => label || ''}

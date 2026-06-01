@@ -101,7 +101,7 @@ async def get_stats(symbol: str):
         
         # Historical periods
         periods = {
-            "1d": "1d",
+            "1d": "2d",
             "1wk": "5d",
             "1mo": "1mo",
             "6mo": "6mo",
@@ -115,8 +115,11 @@ async def get_stats(symbol: str):
             if not hist.empty:
                 start_price = hist['Close'].iloc[0]
                 change_abs = round(current_price - start_price, 2)
-                change_pct = round(((current_price - start_price) / start_price) * 100, 2) if start_price else 0.0
-                stats[label] = {"pct": change_pct, "abs": change_abs}
+                if start_price and abs((current_price - start_price) / start_price) < 100:
+                    change_pct = round(((current_price - start_price) / start_price) * 100, 2)
+                    stats[label] = {"pct": change_pct, "abs": change_abs}
+                else:
+                    stats[label] = None
             else:
                 stats[label] = None
 
@@ -160,13 +163,15 @@ async def get_price(symbol: str):
         raise HTTPException(status_code=404, detail=f"Could not find data for {symbol}. Please try the Ticker symbol (e.g., SAP.DE). Error: {str(e)}")
 
 @app.get("/history/{symbol}")
-async def get_history(symbol: str, period: str = "1mo"):
+async def get_history(symbol: str, period: str = "1mo", start: str = None):
     try:
         ticker_symbol = resolve_symbol(symbol)
         ticker = yf.Ticker(ticker_symbol)
         
-        # Valid yfinance periods: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
-        hist = ticker.history(period=period)
+        if start:
+            hist = ticker.history(start=start)
+        else:
+            hist = ticker.history(period=period)
         if hist.empty:
             raise HTTPException(status_code=404, detail="No history found")
             
@@ -176,11 +181,12 @@ async def get_history(symbol: str, period: str = "1mo"):
         return {
             "symbol": ticker_symbol,
             "period": period,
+            "start": start,
             "prices": [round(p, 2) for p in prices],
             "dates": dates
         }
     except Exception as e:
-        raise HTTPException(status_code=404, detail=f"Error fetching history for {symbol} with period {period}: {str(e)}")
+        raise HTTPException(status_code=404, detail=f"Error fetching history for {symbol}: {str(e)}")
 
 @app.get("/news/{symbol}")
 async def get_news(symbol: str):
@@ -200,6 +206,115 @@ async def get_news(symbol: str):
         return result
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Error fetching news for {symbol}: {str(e)}")
+
+@app.get("/detail/{symbol}")
+async def get_detail(symbol: str):
+    try:
+        ticker_symbol = resolve_symbol(symbol)
+        ticker = yf.Ticker(ticker_symbol)
+
+        fi = ticker.fast_info
+        info = {}
+
+        try:
+            info = ticker.info
+        except Exception:
+            pass
+
+        analyst = {}
+        try:
+            pt = ticker.analyst_price_targets or {}
+            analyst["priceTargets"] = {
+                "current": pt.get("current"),
+                "mean": pt.get("mean"),
+                "median": pt.get("median"),
+                "high": pt.get("high"),
+                "low": pt.get("low"),
+            }
+        except Exception:
+            pass
+
+        try:
+            rs = ticker.recommendations_summary
+            if rs is not None and not rs.empty:
+                analyst["recommendations"] = {
+                    k: int(v) for k, v in rs.iloc[0].to_dict().items()
+                }
+        except Exception:
+            pass
+
+        try:
+            ee = ticker.earnings_estimate
+            if ee is not None and not ee.empty:
+                analyst["earningsEstimate"] = []
+                for idx, row in ee.iterrows():
+                    analyst["earningsEstimate"].append({
+                        "period": str(idx),
+                        "avg": round(row.get("avg", 0), 2) if pd.notna(row.get("avg")) else None,
+                        "low": round(row.get("low", 0), 2) if pd.notna(row.get("low")) else None,
+                        "high": round(row.get("high", 0), 2) if pd.notna(row.get("high")) else None,
+                    })
+        except Exception:
+            pass
+
+        try:
+            re = ticker.revenue_estimate
+            if re is not None and not re.empty:
+                analyst["revenueEstimate"] = []
+                for idx, row in re.iterrows():
+                    analyst["revenueEstimate"].append({
+                        "period": str(idx),
+                        "avg": round(row.get("avg", 0), 2) if pd.notna(row.get("avg")) else None,
+                        "low": round(row.get("low", 0), 2) if pd.notna(row.get("low")) else None,
+                        "high": round(row.get("high", 0), 2) if pd.notna(row.get("high")) else None,
+                    })
+        except Exception:
+            pass
+
+        try:
+            ge = ticker.growth_estimates
+            if ge is not None and not ge.empty:
+                analyst["growthEstimates"] = {}
+                for idx, row in ge.iterrows():
+                    val = None
+                    for c in ge.columns:
+                        if pd.notna(row[c]):
+                            val = round(row[c], 2)
+                            break
+                    analyst["growthEstimates"][str(idx)] = val
+        except Exception:
+            pass
+
+        def g(v, fallback=None):
+            return v if v is not None else fallback
+
+        return {
+            "symbol": ticker_symbol,
+            "name": g(info.get("longName"), info.get("shortName", "")),
+            "currency": g(getattr(fi, "currency", None), info.get("currency", "")),
+            "price": g(getattr(fi, "last_price", None), info.get("currentPrice", 0)),
+            "previousClose": g(getattr(fi, "previous_close", None), info.get("previousClose")),
+            "marketCap": g(getattr(fi, "market_cap", None), info.get("marketCap")),
+            "peRatio": g(getattr(fi, "trailing_pe", None), info.get("trailingPE")),
+            "forwardPE": g(getattr(fi, "forward_pe", None), info.get("forwardPE")),
+            "dividendYield": g(getattr(fi, "dividend_yield", None), info.get("dividendYield")),
+            "dividendRate": g(getattr(fi, "dividend_rate", None), info.get("dividendRate")),
+            "beta": g(getattr(fi, "beta", None), info.get("beta")),
+            "high52w": g(getattr(fi, "year_high", None), info.get("fiftyTwoWeekHigh")),
+            "low52w": g(getattr(fi, "year_low", None), info.get("fiftyTwoWeekLow")),
+            "avgVolume": g(getattr(fi, "average_volume", None), info.get("averageVolume")),
+            "volume": g(getattr(fi, "volume", None), info.get("volume")),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "description": info.get("longBusinessSummary"),
+            "employees": info.get("fullTimeEmployees"),
+            "website": info.get("website"),
+            "country": info.get("country"),
+            "exchange": info.get("exchange"),
+            "analyst": analyst,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Error fetching detail for {symbol}: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
