@@ -1,0 +1,16 @@
+{
+    "email": {
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "sender_email": "kaluza1980@gmail.com",
+        "sender_password": "ypcj phuo xgwx rjbm",
+        "receiver_email": "david@kaluza.dk"
+    },
+    "keywords": ["Aktie", "DAX", "Kurs", "Börse", "CEO", "Quartalsergebnis", "Unternehmen", "Markt"],
+    "check_interval_minutes": 60,
+    "rss_urls": [
+        "https://www.spiegel.de/wirtschaft/index.rss",
+        "https://www.faz.net/rss/aktuell/wirtschaft/",
+        "https://www.handelsblatt.com/rss/finanzen"
+    ]
+}

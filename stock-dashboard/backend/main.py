@@ -1,8 +1,47 @@
+import json
+import numpy as np
+import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import JSONResponse
 import yfinance as yf
 import pandas as pd
 from typing import List, Dict, Any
+
+
+def clean_nans(obj):
+    if isinstance(obj, dict):
+        return {k: clean_nans(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_nans(v) for v in obj]
+    elif isinstance(obj, (np.floating,)):
+        v = float(obj)
+        return None if (np.isnan(v) or np.isinf(v)) else v
+    elif isinstance(obj, float):
+        return None if (np.isnan(obj) or np.isinf(obj)) else obj
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    elif isinstance(obj, (np.ndarray,)):
+        return clean_nans(obj.tolist())
+    return obj
+
+
+original_render = JSONResponse.render
+
+
+def json_safe_render(self, content):
+    content = clean_nans(content)
+    return json.dumps(
+        content,
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+JSONResponse.render = json_safe_render
 
 app = FastAPI()
 
@@ -175,14 +214,24 @@ async def get_history(symbol: str, period: str = "1mo", start: str = None):
         if hist.empty:
             raise HTTPException(status_code=404, detail="No history found")
             
-        prices = hist['Close'].tolist()
-        dates = hist.index.strftime('%Y-%m-%d').tolist() if hasattr(hist.index, 'strftime') else list(range(len(prices)))
-        
+        closes = hist['Close']
+        valid = [
+            (d.strftime('%Y-%m-%d'), round(float(p), 2))
+            for d, p in zip(hist.index, closes)
+            if pd.notna(p)
+        ] if hasattr(hist.index, 'strftime') else [
+            (str(i), round(float(p), 2))
+            for i, p in enumerate(closes)
+            if pd.notna(p)
+        ]
+        prices = [v[1] for v in valid]
+        dates = [v[0] for v in valid]
+
         return {
             "symbol": ticker_symbol,
             "period": period,
             "start": start,
-            "prices": [round(p, 2) for p in prices],
+            "prices": prices,
             "dates": dates
         }
     except Exception as e:
@@ -223,7 +272,7 @@ async def get_detail(symbol: str):
 
         analyst = {}
         try:
-            pt = ticker.analyst_price_targets or {}
+            pt = ticker.analyst_price_target or ticker.analyst_price_targets or {}
             analyst["priceTargets"] = {
                 "current": pt.get("current"),
                 "mean": pt.get("mean"),
@@ -316,6 +365,182 @@ async def get_detail(symbol: str):
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Error fetching detail for {symbol}: {str(e)}")
 
+
+def normalize_search_result(item: Dict[str, Any]) -> Dict[str, Any] | None:
+    """
+    Normalize yfinance search result objects to a small, stable frontend shape.
+    """
+    if not isinstance(item, dict):
+        return None
+
+    symbol = item.get("symbol") or item.get("ticker")
+    if not symbol:
+        return None
+
+    name = (
+        item.get("shortname")
+        or item.get("longname")
+        or item.get("name")
+        or item.get("displayName")
+        or ""
+    )
+
+    exchange = (
+        item.get("exchange")
+        or item.get("exchDisp")
+        or item.get("exchangeName")
+        or ""
+    )
+
+    quote_type = item.get("quoteType") or item.get("typeDisp") or item.get("type") or ""
+
+    return {
+        "symbol": str(symbol).upper(),
+        "name": name,
+        "exchange": exchange,
+        "type": quote_type,
+    }
+
+
+def dedupe_search_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen = set()
+    unique = []
+
+    for item in results:
+        symbol = item.get("symbol")
+        exchange = item.get("exchange") or ""
+        key = (symbol, exchange)
+
+        if not symbol or key in seen:
+            continue
+
+        seen.add(key)
+        unique.append(item)
+
+    return unique
+
+
+def search_with_yfinance(query: str, limit: int) -> List[Dict[str, Any]]:
+    """
+    Use yfinance's Search API when available.
+    The yfinance API has changed across versions, so this function is intentionally defensive.
+    """
+    results = []
+
+    try:
+        search = yf.Search(query, max_results=limit)
+        quotes = getattr(search, "quotes", None) or []
+        for item in quotes:
+            normalized = normalize_search_result(item)
+            if normalized:
+                results.append(normalized)
+    except Exception:
+        pass
+
+    return results
+
+
+def search_with_query_module(query: str, limit: int) -> List[Dict[str, Any]]:
+    """
+    Fallback for yfinance versions that expose yahoo.query.search instead of yf.Search.
+    """
+    results = []
+
+    try:
+        from yfinance import query as yf_query
+
+        response = yf_query.search(query)
+        quotes = response.get("quotes", []) if isinstance(response, dict) else []
+
+        for item in quotes[:limit]:
+            normalized = normalize_search_result(item)
+            if normalized:
+                results.append(normalized)
+    except Exception:
+        pass
+
+    return results
+
+
+def search_with_wkn_map(query: str, limit: int) -> List[Dict[str, Any]]:
+    q = query.upper().strip()
+    results = []
+
+    for wkn, ticker in WKN_MAP.items():
+        if q in wkn or q in ticker.upper():
+            results.append({
+                "symbol": ticker,
+                "name": f"WKN {wkn}",
+                "exchange": "Germany",
+                "type": "Equity",
+            })
+
+        if len(results) >= limit:
+            break
+
+    return results
+
+
+@app.get("/search")
+async def search_stocks(q: str, limit: int = 10):
+    """
+    Search stocks by company name, ticker or WKN.
+
+    Frontend response shape:
+    [
+      {
+        "symbol": "AAPL",
+        "name": "Apple Inc.",
+        "exchange": "NASDAQ",
+        "type": "EQUITY"
+      }
+    ]
+    """
+    query = q.strip()
+
+    if len(query) < 2:
+        return []
+
+    safe_limit = max(1, min(limit, 20))
+    upper_query = query.upper()
+
+    results: List[Dict[str, Any]] = []
+
+    # Exact WKN match first, so German WKN input remains fast and deterministic.
+    if upper_query in WKN_MAP:
+        results.append({
+            "symbol": WKN_MAP[upper_query],
+            "name": f"WKN {upper_query}",
+            "exchange": "Germany",
+            "type": "Equity",
+        })
+
+    # Local WKN/ticker fallback.
+    results.extend(search_with_wkn_map(query, safe_limit))
+
+    # yfinance company/ticker search.
+    results.extend(search_with_yfinance(query, safe_limit))
+
+    # Compatibility fallback for older/newer yfinance variants.
+    if len(results) < safe_limit:
+        results.extend(search_with_query_module(query, safe_limit))
+
+    # Last fallback: allow direct ticker entry when no remote search result is found.
+    direct_symbol = resolve_symbol(upper_query)
+    if direct_symbol and not any(item.get("symbol") == direct_symbol for item in results):
+        results.append({
+            "symbol": direct_symbol,
+            "name": "Direkte Eingabe",
+            "exchange": "",
+            "type": "Ticker",
+        })
+
+    return dedupe_search_results(results)[:safe_limit]
+
+frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+if os.path.isdir(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

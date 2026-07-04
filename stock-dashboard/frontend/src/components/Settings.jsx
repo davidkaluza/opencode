@@ -37,12 +37,22 @@ const Settings = ({ colors, onChange, onClose }) => {
                 <div className="text-xs-mono uppercase">{f.label}</div>
                 <div className="text-[0.7rem] text-muted">{f.desc}</div>
               </div>
-              <input
-                type="color"
-                value={colors[f.key] || DEFAULTS[f.key]}
-                onChange={(e) => handleChange(f.key, e.target.value)}
-                className="w-10 h-8 p-0 border-0 cursor-pointer bg-transparent"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={colors[f.key] || DEFAULTS[f.key]}
+                  onChange={(e) => handleChange(f.key, e.target.value)}
+                  className="w-20 bg-background border border-accent text-xs-mono p-1 focus:outline-none focus:border-muted transition-colors uppercase font-mono"
+                  placeholder="#000000"
+                  maxLength={7}
+                />
+                <input
+                  type="color"
+                  value={colors[f.key] || DEFAULTS[f.key]}
+                  onChange={(e) => handleChange(f.key, e.target.value)}
+                  className="w-10 h-8 p-0 border-0 cursor-pointer bg-transparent"
+                />
+              </div>
             </div>
           ))}
         </div>

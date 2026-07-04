@@ -1,0 +1,26 @@
+Änderungen an projekt-dashboard.html
+=====================================
+
+1. Tippfehler korrigiert (2×)
+   - "hinzugefugt" → "hinzugefügt" (addEmployee, addLeader)
+
+2. Falsche Überfällig-Logik entfernt
+   - Bedingung `daysUntil <= 7` in getProjectStatus() gelöscht
+   - Nur noch Enddatum in der Vergangenheit (`daysUntil < 0`) gilt als überfällig
+
+3. Toten Code entfernt
+   - Ungenutzte Funktion toggleTeamMember() gelöscht
+
+4. Bearbeiten/Löschen-Buttons zentriert
+   - .project-actions: von top/right auf top:50% left:50% translate(-50%,-50%)
+   - flex-direction: column mit gap:8px, z-index:10
+
+5. Hover-Abdunklung hinzugefügt
+   - ::before-Pseudo-Element mit background: rgba(0,0,0,0.85)
+   - z-index:2 (über Inhalt, unter Buttons mit z-index:10)
+   - pointer-events: none (klickbar durchlässig)
+
+6. Team-Checkbox-Doppeltoggle gefixt (openModal + openEditModal)
+   - labels[i].onclick entfernt (verursachte Doppeltoggle durch Label-Browser-Verhalten)
+   - Ersetzt durch change-EventListener auf jeder Checkbox
+   - Browser steuert den checked-Zustand, Eventlistener aktualisiert nur das Styling

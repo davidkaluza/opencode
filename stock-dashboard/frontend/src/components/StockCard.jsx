@@ -1,32 +1,109 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { LineChart, Line, ResponsiveContainer, YAxis, XAxis, Tooltip } from 'recharts';
-import { Trash2 } from 'lucide-react';
+import { Trash2, ArrowLeftRight, Star } from 'lucide-react';
 
-const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, purchaseDate, onUpdatePurchasePrice, onUpdateShareQuantity, onUpdatePurchaseDate, onRemove, onPeriodChange, onShowDetail }) => {
+const DEFAULT_CHART_DOMAIN = { min: 0, max: 100 };
+const CAGR_MIN_DAYS = 30;
+
+const toNumber = (value, fallback = 0) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
+const formatNumber = (value, digits = 2) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toFixed(digits) : '—';
+};
+
+const formatPercent = (value, digits = 2) => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '—';
+  return `${num > 0 ? '+' : ''}${num.toFixed(digits)}%`;
+};
+
+const parseNumericInput = (value) => (value === '' ? '' : Number(value));
+
+const PerformanceBadge = ({ label, value }) => {
+  const pct = value !== null && typeof value === 'object' ? value.pct : value;
+  const abs = value !== null && typeof value === 'object' ? value.abs : null;
+  const pctNumber = Number(pct);
+  const hasPct = Number.isFinite(pctNumber);
+  const isPctPositive = !hasPct || pctNumber >= 0;
+  const absNumber = Number(abs);
+  const hasAbs = Number.isFinite(absNumber);
+
+  return (
+    <div className="flex flex-col items-center justify-center border-r border-accent last:border-r-0 px-2">
+      <span className="text-[0.72rem] text-muted uppercase">{label}</span>
+      <span className={`text-xs-mono ${isPctPositive ? 'text-green-500' : 'text-red-500'}`}>
+        {hasPct ? formatPercent(pctNumber) : '—'}
+      </span>
+      {hasAbs && (
+        <span className={`text-[0.6rem] ${absNumber >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+          {absNumber >= 0 ? '+' : ''}{formatNumber(absNumber)}
+        </span>
+      )}
+    </div>
+  );
+};
+
+const StockCard = ({
+  stock = {},
+  history = [],
+  stats = {},
+  purchasePrice,
+  shareQuantity,
+  purchaseDate,
+  onUpdatePurchasePrice,
+  onUpdateShareQuantity,
+  onUpdatePurchaseDate,
+  onRemove,
+  onPeriodChange,
+  onShowDetail,
+  onMoveCopy,
+  onAddInsiderBuy,
+  accounts,
+  activeAccountId,
+}) => {
   const [period, setPeriod] = useState('1mo');
-  const isPositive = stock.change >= 0;
-  const currentPrice = stock.price;
-  const qty = shareQuantity || 0;
-  const buyValue = purchasePrice * qty;
+
+  const symbol = stock.symbol || '';
+  const chartHistory = Array.isArray(history) ? history : [];
+  const currentPrice = toNumber(stock.price);
+  const change = toNumber(stock.change);
+  const changePercent = toNumber(stock.change_percent);
+  const qty = toNumber(shareQuantity);
+  const buyPrice = toNumber(purchasePrice);
+  const performance = stats?.performance ?? {};
+
+  const isPositive = change >= 0;
+  const buyValue = buyPrice * qty;
   const currentValue = currentPrice * qty;
   const profitLoss = currentValue - buyValue;
   const hasProfit = profitLoss >= 0;
-
-  const chartDomain = useMemo(() => {
-    if (!history || history.length === 0) return { min: 0, max: 100 };
-    const prices = history.map(d => d.price);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const padding = (max - min) * 0.05;
-    return {
-      min: min - padding,
-      max: max + padding
-    };
-  }, [history]);
-
   const currentValueClass = hasProfit ? 'text-green-500' : 'text-red-500';
 
-  const periods = [
+  const chartDomain = useMemo(() => {
+    if (chartHistory.length === 0) return DEFAULT_CHART_DOMAIN;
+
+    const prices = chartHistory
+      .map((item) => Number(item?.price))
+      .filter(Number.isFinite);
+
+    if (prices.length === 0) return DEFAULT_CHART_DOMAIN;
+
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min || Math.abs(min) * 0.02 || 1;
+    const padding = Math.max(range * 0.1, Math.abs(min) * 0.005, 0.01);
+
+    return {
+      min: min - padding,
+      max: max + padding,
+    };
+  }, [chartHistory]);
+
+  const periods = useMemo(() => [
     { label: '1D', value: '1d' },
     { label: '1W', value: '5d' },
     { label: '1M', value: '1mo' },
@@ -34,120 +111,161 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, purcha
     { label: '1Y', value: '1y' },
     { label: '5Y', value: '5y' },
     ...(purchaseDate ? [{ label: 'Seit Kauf', value: 'since_purchase' }] : []),
-  ];
+  ], [purchaseDate]);
 
-  const handlePeriodChange = (val) => {
-    setPeriod(val);
-    if (val === 'since_purchase' && purchaseDate) {
-      onPeriodChange(stock.symbol, null, purchaseDate);
-    } else {
-      onPeriodChange(stock.symbol, val);
-    }
-  };
+  const daysHeld = useMemo(() => {
+    if (!purchaseDate) return null;
 
-  const daysHeld = purchaseDate
-    ? Math.floor((new Date() - new Date(purchaseDate)) / (1000 * 60 * 60 * 24))
-    : null;
+    const parsedPurchaseDate = new Date(purchaseDate);
+    if (Number.isNaN(parsedPurchaseDate.getTime())) return null;
 
-  const profitSincePurchase = purchasePrice > 0 && daysHeld !== null && daysHeld > 0
-    ? (Math.pow(currentPrice / purchasePrice, 365 / daysHeld) - 1) * 100
-    : purchasePrice > 0
-      ? ((currentPrice - purchasePrice) / purchasePrice) * 100
-      : null;
-  const isProfitPct = profitSincePurchase >= 0;
-  const useCagr = purchasePrice > 0 && daysHeld !== null && daysHeld > 0;
-  const plPct = purchasePrice > 0 ? ((currentPrice - purchasePrice) / purchasePrice) * 100 : 0;
-
-  const PerformanceBadge = ({ label, value }) => {
-    const pct = value !== null && typeof value === 'object' ? (value.pct ?? 0) : (value ?? 0);
-    const abs = value !== null && typeof value === 'object' ? value.abs : null;
-    return (
-      <div className="flex flex-col items-center justify-center border-r border-accent last:border-r-0 px-2">
-        <span className="text-[0.72rem] text-muted uppercase">{label}</span>
-        <span className={`text-xs-mono ${pct >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-          {pct > 0 ? '+' : ''}{pct}%
-        </span>
-        {abs !== null && abs !== undefined && (
-          <span className={`text-[0.6rem] ${abs >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {abs >= 0 ? '+' : ''}{abs.toFixed(2)}
-          </span>
-        )}
-      </div>
+    return Math.max(
+      0,
+      Math.floor((Date.now() - parsedPurchaseDate.getTime()) / (1000 * 60 * 60 * 24)),
     );
+  }, [purchaseDate]);
+
+  const useCagr = buyPrice > 0 && daysHeld !== null && daysHeld >= CAGR_MIN_DAYS;
+  const profitSincePurchase = buyPrice > 0
+    ? useCagr
+      ? (Math.pow(currentPrice / buyPrice, 365 / daysHeld) - 1) * 100
+      : ((currentPrice - buyPrice) / buyPrice) * 100
+    : null;
+  const isProfitPct = profitSincePurchase !== null && profitSincePurchase >= 0;
+  const plPct = buyPrice > 0 ? ((currentPrice - buyPrice) / buyPrice) * 100 : null;
+
+  const handlePeriodChange = (value) => {
+    setPeriod(value);
+
+    if (value === 'since_purchase' && purchaseDate) {
+      onPeriodChange?.(symbol, null, purchaseDate);
+      return;
+    }
+
+    onPeriodChange?.(symbol, value);
   };
 
   return (
     <div className="bg-surface border border-accent p-4 flex flex-col gap-4 hover:border-muted transition-colors">
       <div className="flex justify-between items-start">
         <div>
-          <h3 className="text-title-mono font-bold uppercase cursor-pointer hover:text-accent transition-colors" onClick={() => onShowDetail(stock.symbol)}>{stock.name || 'N/A'} <span className="text-muted">({stock.symbol})</span></h3>
-          <p className="text-xs-mono text-muted">{stock.currency}</p>
+          <h3
+            className="text-title-mono font-bold uppercase cursor-pointer hover:text-accent transition-colors"
+            onClick={() => onShowDetail?.(symbol)}
+          >
+            {stock.name || 'N/A'} <span className="text-muted">({symbol || 'N/A'})</span>
+          </h3>
+          <p className="text-xs-mono text-muted">{stock.currency || '—'}</p>
         </div>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onRemove(stock.symbol); }}
-          className="text-muted hover:text-red-500 transition-colors"
-        >
-          <Trash2 size={12} />
-        </button>
+        <div className="flex items-center gap-1">
+          {accounts && accounts.length > 1 && (
+            <button
+              type="button"
+              aria-label={`${symbol || 'Aktie'} verschieben`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onMoveCopy?.(symbol);
+              }}
+              className="text-muted hover:text-accent transition-colors"
+            >
+              <ArrowLeftRight size={12} />
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label={`${symbol || 'Aktie'} als Insiderkauf`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddInsiderBuy?.(symbol);
+            }}
+            className="text-muted hover:text-yellow-500 transition-colors"
+          >
+            <Star size={12} />
+          </button>
+          <button
+            type="button"
+            aria-label={`${symbol || 'Aktie'} entfernen`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemove?.(symbol);
+            }}
+            className="text-muted hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
 
       <div className="flex items-baseline gap-2">
-        <span className="text-lg font-bold">{stock.price}</span>
+        <span className="text-lg font-bold">{formatNumber(currentPrice)}</span>
         <span className={`text-xs-mono ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
-          {isPositive ? '+' : ''}{stock.change} ({stock.change_percent}%)
+          {formatNumber(change)} ({formatPercent(changePercent)})
         </span>
       </div>
 
       <div className="grid grid-cols-6 gap-0 border-y border-accent py-2">
-        <PerformanceBadge label="Day" value={stats.performance['1d']} />
-        <PerformanceBadge label="Week" value={stats.performance['1wk']} />
-        <PerformanceBadge label="1M" value={stats.performance['1mo']} />
-        <PerformanceBadge label="6M" value={stats.performance['6mo']} />
-        <PerformanceBadge label="Year" value={stats.performance['1y']} />
-        <PerformanceBadge label="5Year" value={stats.performance['5y']} />
+        <PerformanceBadge label="Day" value={performance['1d']} />
+        <PerformanceBadge label="Week" value={performance['1wk']} />
+        <PerformanceBadge label="1M" value={performance['1mo']} />
+        <PerformanceBadge label="6M" value={performance['6mo']} />
+        <PerformanceBadge label="Year" value={performance['1y']} />
+        <PerformanceBadge label="5Year" value={performance['5y']} />
       </div>
 
       <div className="flex gap-2">
         <div className="flex flex-col gap-1 flex-1">
           <span className="text-[0.72rem] text-muted uppercase">Qty</span>
-          <input 
-            type="number" 
-            value={shareQuantity || ''}
-            onChange={(e) => { e.stopPropagation(); onUpdateShareQuantity(stock.symbol, e.target.value); }}
+          <input
+            type="number"
+            value={shareQuantity ?? ''}
+            onChange={(event) => {
+              event.stopPropagation();
+              onUpdateShareQuantity?.(symbol, parseNumericInput(event.target.value));
+            }}
             placeholder="0"
             className="bg-background border border-accent text-xs-mono p-1 focus:outline-none focus:border-muted transition-colors w-full"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           />
         </div>
         <div className="flex flex-col gap-1 flex-1">
           <span className="text-[0.72rem] text-muted uppercase">Buy Price</span>
-          <input 
-            type="number" 
-            value={purchasePrice || ''}
-            onChange={(e) => { e.stopPropagation(); onUpdatePurchasePrice(stock.symbol, e.target.value); }}
+          <input
+            type="number"
+            value={purchasePrice ?? ''}
+            onChange={(event) => {
+              event.stopPropagation();
+              onUpdatePurchasePrice?.(symbol, parseNumericInput(event.target.value));
+            }}
             placeholder="0.00"
             className="bg-background border border-accent text-xs-mono p-1 focus:outline-none focus:border-muted transition-colors w-full"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           />
         </div>
         <div className="flex flex-col gap-1 flex-1">
           <span className="text-[0.72rem] text-muted uppercase">Buy Date</span>
-          <input 
-            type="date" 
+          <input
+            type="date"
             value={purchaseDate || ''}
-            onChange={(e) => { e.stopPropagation(); onUpdatePurchaseDate(stock.symbol, e.target.value); }}
+            onChange={(event) => {
+              event.stopPropagation();
+              onUpdatePurchaseDate?.(symbol, event.target.value);
+            }}
             className="bg-background border border-accent text-xs-mono p-1 focus:outline-none focus:border-muted transition-colors w-full"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           />
         </div>
       </div>
 
       <div className="flex justify-between items-center text-xs-mono">
-        <span className="text-muted">Buy: {buyValue.toFixed(2)} / <span className={currentValueClass}>Curr: {currentValue.toFixed(2)}</span> <span className={currentValueClass}>({plPct >= 0 ? '+' : ''}{plPct.toFixed(2)}%)</span></span>
+        <span className="text-muted">
+          Buy: {formatNumber(buyValue)} /{' '}
+          <span className={currentValueClass}>Curr: {formatNumber(currentValue)}</span>{' '}
+          <span className={currentValueClass}>({plPct !== null ? formatPercent(plPct) : '—'})</span>
+        </span>
         <div className="text-right">
           {profitSincePurchase !== null && (
             <span className={`${isProfitPct ? 'text-green-500' : 'text-red-500'}`}>
-              {isProfitPct ? '+' : ''}{profitSincePurchase.toFixed(2)}%{useCagr ? ' p.a.' : ''} ({hasProfit ? '+' : ''}{profitLoss.toFixed(2)})
+              {formatPercent(profitSincePurchase)}{useCagr ? ' p.a.' : ''} ({hasProfit ? '+' : ''}{formatNumber(profitLoss)})
             </span>
           )}
           {daysHeld !== null && (
@@ -158,45 +276,49 @@ const StockCard = ({ stock, history, stats, purchasePrice, shareQuantity, purcha
 
       <div className="flex flex-col gap-2">
         <div className="flex gap-1">
-          {periods.map(p => (
-            <button 
-              key={p.value}
-              onClick={(e) => { e.stopPropagation(); handlePeriodChange(p.value); }}
-              className={`text-[0.72rem] px-1 py-0.5 border border-accent transition-colors ${period === p.value ? 'bg-accent text-white' : 'text-muted hover:border-muted'}`}
+          {periods.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handlePeriodChange(item.value);
+              }}
+              className={`text-[0.72rem] px-1 py-0.5 border border-accent transition-colors ${period === item.value ? 'bg-accent text-white' : 'text-muted hover:border-muted'}`}
             >
-              {p.label}
+              {item.label}
             </button>
           ))}
         </div>
         <div className="h-32 w-full">
           <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={history} key={`${stock.symbol}-${period}-${purchaseDate}-${history.length}`}>
-              <XAxis 
+            <LineChart data={chartHistory} key={`${symbol}-${period}-${purchaseDate || ''}-${chartHistory.length}`}>
+              <XAxis
                 dataKey="date"
-                tick={{ fill: '#888', fontSize: '0.6rem' }}
-                tickFormatter={(v) => v ? v.slice(5) : ''}
+                tick={{ fill: 'var(--clr-muted)', fontSize: '0.6rem' }}
+                tickFormatter={(value) => (value ? String(value).slice(5) : '')}
                 interval="preserveStartEnd"
                 minTickGap={30}
               />
-              <YAxis 
-                domain={[chartDomain.min, chartDomain.max]} 
+              <YAxis
+                domain={[chartDomain.min, chartDomain.max]}
                 orientation="left"
-                tick={{ fill: '#888', fontSize: '0.6rem' }}
-                tickFormatter={(v) => v.toFixed(2)}
+                tick={{ fill: 'var(--clr-muted)', fontSize: '0.6rem' }}
+                tickFormatter={(value) => formatNumber(value)}
                 width={45}
               />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#33312B', border: '1px solid #C09537', fontSize: '0.72rem' }}
-                labelStyle={{ color: '#888' }}
-                formatter={(value) => [value.toFixed(2), 'Price']}
+              <Tooltip
+                contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--clr-accent)', fontSize: '0.72rem' }}
+                labelStyle={{ color: 'var(--clr-muted)' }}
+                formatter={(value) => [formatNumber(value), 'Price']}
                 labelFormatter={(label) => label || ''}
               />
-              <Line 
-                type="monotone" 
-                dataKey="price" 
-                stroke={isPositive ? '#22c55e' : '#ef4444'} 
-                strokeWidth={1.5} 
-                dot={false} 
+              <Line
+                type="monotone"
+                dataKey="price"
+                stroke={isPositive ? '#22c55e' : '#ef4444'}
+                strokeWidth={1.5}
+                dot={false}
                 isAnimationActive={false}
               />
             </LineChart>
